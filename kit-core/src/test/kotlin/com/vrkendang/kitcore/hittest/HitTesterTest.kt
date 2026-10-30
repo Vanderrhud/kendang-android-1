@@ -21,14 +21,16 @@ class HitTesterTest {
 
     @Test
     fun testBassCrescentBands() {
-        // Titik crescent di sisi kanan oval Bass (xu = 0.70 -> canvasX = 0.35f, di luar C_div tapi di dalam oval Bass)
+        // Titik crescent di sisi kanan oval Bass (xu = 0.70 -> canvasX = 0.35f, di luar C_div).
+        // Pada X tersebut oval hanya mencakup Y sekitar [0.326, 0.774], sehingga titik
+        // band teratas dan terbawah dipilih menjauh dari tepi oval.
         // Oval Y rentang [0.25, 0.85], total tinggi 0.60, 4 band per 0.15 tinggi:
-        // Band 0: [0.25, 0.40) -> Y = 0.32
+        // Band 0: [0.25, 0.40) -> Y = 0.35
         // Band 1: [0.40, 0.55) -> Y = 0.48
         // Band 2: [0.55, 0.70) -> Y = 0.62
-        // Band 3: [0.70, 0.85] -> Y = 0.78
+        // Band 3: [0.70, 0.85] -> Y = 0.75
 
-        val band0Zone = HitTester.findZone(newMetroKit, 0.35f, 0.32f)
+        val band0Zone = HitTester.findZone(newMetroKit, 0.35f, 0.35f)
         assertNotNull(band0Zone)
         assertEquals("bass-2", band0Zone.id)
         assertEquals(0, band0Zone.band)
@@ -43,7 +45,7 @@ class HitTesterTest {
         assertEquals("bass-4", band2Zone.id)
         assertEquals(2, band2Zone.band)
 
-        val band3Zone = HitTester.findZone(newMetroKit, 0.35f, 0.78f)
+        val band3Zone = HitTester.findZone(newMetroKit, 0.35f, 0.75f)
         assertNotNull(band3Zone)
         assertEquals("bass-5", band3Zone.id)
         assertEquals(3, band3Zone.band)
