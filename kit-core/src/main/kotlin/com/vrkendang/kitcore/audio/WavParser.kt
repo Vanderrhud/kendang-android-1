@@ -142,15 +142,14 @@ object WavParser {
         if (!formatParsed) {
             throw IllegalArgumentException("Chunk 'fmt ' tidak ditemukan di dalam file WAV")
         }
-        if (pcmData == null) {
-            throw IllegalArgumentException("Chunk 'data' tidak ditemukan atau terpotong di dalam file WAV")
-        }
+        val nonNullPcm = pcmData
+            ?: throw IllegalArgumentException("Chunk 'data' tidak ditemukan atau terpotong di dalam file WAV")
 
         return WavPcm(
             sampleRate = sampleRate,
             channels = numChannels,
             bitsPerSample = bitsPerSample,
-            pcmData = pcmData
+            pcmData = nonNullPcm
         )
     }
 }

@@ -55,11 +55,10 @@ object KitPackageReader {
             }
         }
 
-        if (kitJsonContent == null) {
-            throw IllegalArgumentException("Paket tidak valid: 'kit.json' tidak ditemukan di akar paket")
-        }
+        val jsonString = kitJsonContent
+            ?: throw IllegalArgumentException("Paket tidak valid: 'kit.json' tidak ditemukan di akar paket")
 
-        val kitData = KitJsonParser.parse(kitJsonContent)
+        val kitData = KitJsonParser.parse(jsonString)
         KitValidator.validateOrThrow(kitData)
 
         return ExtractedKit(kitData, wavMap)
