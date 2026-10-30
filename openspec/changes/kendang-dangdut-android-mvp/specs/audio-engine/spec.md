@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Menyediakan pemutaran suara dengan latensi serendah mungkin, mendukung banyak suara aktif secara bersamaan (polyphony), dan mengelola siklus hidup audio agar hemat sumber daya saat aplikasi tidak di foreground.
+Menyediakan pemutaran suara dengan latensi serendah mungkin, mendukung banyak suara aktif secara bersamaan (polyphony), menangani zona yang belum memiliki suara secara aman, dan mengelola siklus hidup audio agar hemat sumber daya saat aplikasi tidak di foreground.
 
 ## ADDED Requirements
 
@@ -22,7 +22,7 @@ Mesin audio SHALL mampu memainkan hingga 32 suara secara bersamaan tanpa ada sua
 
 #### Scenario: Banyak jari membunyikan zona berbeda bersamaan
 - **WHEN** pemain menggunakan banyak jari untuk menyentuh zona-zona berbeda secara bersamaan
-- **THEN** semua zona yang tersentuh menghasilkan suara secara bersamaan
+- **THEN** semua zona yang tersentuh dan telah memiliki file suara menghasilkan suara secara bersamaan
 
 ### Requirement: Voice Stealing saat kapasitas penuh
 Ketika seluruh kapasitas 32 slot suara terisi, mesin audio SHALL secara otomatis mengambil alih slot suara yang paling tua untuk membunyikan suara baru, dengan transisi yang mulus tanpa bunyi pop atau klik.
@@ -31,12 +31,30 @@ Ketika seluruh kapasitas 32 slot suara terisi, mesin audio SHALL secara otomatis
 - **WHEN** lebih dari 32 ketukan aktif bersamaan (misalnya rolling sangat cepat)
 - **THEN** suara yang paling lama aktif dihentikan secara mulus dan slotnya digunakan untuk suara baru
 
-### Requirement: WAV dimuat ke memori saat kit dibuka
-Seluruh file WAV dari kit aktif SHALL dimuat ke dalam memori RAM saat kit dipilih, sehingga pemutaran suara tidak memerlukan pembacaan disk saat jari mengetuk.
+### Requirement: Penanganan zona tanpa suara (unassigned) yang aman
+Zona kendang yang belum dipasangi file suara SHALL tidak menyebabkan crash atau error apapun saat disentuh. Sentuhan pada zona unassigned diabaikan secara aman oleh audio engine.
 
-#### Scenario: Suara tersedia instan setelah kit dimuat
-- **WHEN** pemain memilih kit dan mulai bermain
-- **THEN** setiap ketukan membunyikan suara tanpa jeda yang terasa, karena data WAV sudah ada di memori
+#### Scenario: Sentuhan pada zona unassigned tidak menimbulkan error
+- **WHEN** pemain atau developer menyentuh zona yang `sound` -nya null atau belum dipasangkan
+- **THEN** tidak ada suara yang dibunyikan, tidak ada crash, dan tidak ada pesan error yang muncul ke pengguna
+
+#### Scenario: Zone unassigned masih memberikan visual feedback
+- **WHEN** developer menyentuh zona yang belum memiliki suara
+- **THEN** visual feedback sentuhan (highlight) tetap tampil untuk mengkonfirmasi hit-testing bekerja benar
+
+### Requirement: Resampling WAV ke native sample rate
+Mesin audio C++ SHALL secara otomatis me-resample data PCM WAV yang dimuat ke sample rate native stream Oboe, sehingga file WAV dengan sample rate apapun dapat diputar dengan benar.
+
+#### Scenario: WAV dengan sample rate berbeda dari stream diputar dengan benar
+- **WHEN** file WAV dengan sample rate tertentu dimuat ke audio engine
+- **THEN** audio engine me-resample data WAV tersebut ke sample rate native stream dan suara diputar dengan pitch yang benar
+
+### Requirement: WAV dimuat ke memori saat diaktifkan
+Seluruh file WAV dari kit aktif SHALL dimuat ke dalam memori RAM saat dipasangkan atau saat kit dibuka, sehingga pemutaran suara tidak memerlukan pembacaan disk saat jari mengetuk.
+
+#### Scenario: Suara tersedia instan setelah dipasangkan
+- **WHEN** developer memasangkan file WAV ke zona dan mengetuk zona tersebut
+- **THEN** suara langsung terdengar tanpa jeda yang terasa
 
 ### Requirement: Audio stream dijeda saat aplikasi masuk background
 Mesin audio SHALL menghentikan (pause) stream audio saat aplikasi tidak lagi berada di foreground, dan melanjutkan (resume) stream saat aplikasi kembali ke foreground.
@@ -46,7 +64,7 @@ Mesin audio SHALL menghentikan (pause) stream audio saat aplikasi tidak lagi ber
 - **THEN** stream audio Oboe dijeda dan tidak mengkonsumsi sumber daya CPU
 
 #### Scenario: Audio kembali normal saat aplikasi dibuka lagi
-- **WHEN** pemain kembali ke aplikasi kendang
+- **WHEN** pemain kembali ke aplikasi VR Kendang
 - **THEN** stream audio dilanjutkan kembali dan kendang siap dimainkan
 
 ### Requirement: Reconnect otomatis saat perangkat audio berganti

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Menyediakan pipeline build otomatis yang menghasilkan APK debug siap-install setiap kali kode baru di-push ke repositori, dengan unit test otomatis untuk logika inti yang tidak memerlukan perangkat fisik.
+Menyediakan pipeline build otomatis yang menghasilkan APK debug siap-install setiap kali kode baru di-push ke repositori, dengan unit test otomatis untuk logika inti yang tidak memerlukan perangkat fisik. Build CI bersih tanpa aset audio bawaan.
 
 ## ADDED Requirements
 
@@ -24,27 +24,41 @@ Setiap build yang berhasil SHALL mengunggah file APK debug sebagai GitHub Action
 - **WHEN** workflow berjalan dan build berhasil
 - **THEN** file APK debug tersedia di tab Artifacts pada halaman run workflow untuk diunduh
 
-### Requirement: Build melaporkan kegagalan dengan jelas
-Jika proses kompilasi (Kotlin atau C++ NDK) gagal, workflow SHALL ditandai sebagai gagal (exit code non-zero) dengan log yang memuat pesan error yang dapat diidentifikasi penyebabnya.
+### Requirement: APK dibangun tanpa aset audio bawaan
+Build SHALL menghasilkan APK bersih tanpa file WAV bawaan dan tanpa menjalankan generator nada sintetis apapun. Semua file audio dimasukkan oleh developer langsung dari penyimpanan HP via Mode Developer.
 
-#### Scenario: Kesalahan kompilasi terlihat di log CI
-- **WHEN** ada kesalahan kompilasi Kotlin atau C++
-- **THEN** workflow ditandai gagal dan log menampilkan pesan error spesifik
+#### Scenario: APK tidak mengandung file WAV di direktori assets
+- **WHEN** workflow berhasil membangun APK debug
+- **THEN** direktori `assets/kits/` di dalam APK tidak mengandung file `.wav` apapun
 
-### Requirement: Unit test logika inti berjalan di CI
-Workflow SHALL menjalankan JVM unit test untuk logika hit-testing zona akustik dan logika parsing `kit.json` sebagai bagian dari proses build.
+### Requirement: Unit test `:kit-core` berjalan di CI sebelum build APK
+Workflow SHALL menjalankan seluruh unit test modul `:kit-core` sebelum proses `assembleDebug`. Jika ada test yang gagal, build dihentikan dan workflow ditandai gagal.
 
-#### Scenario: Unit test berjalan saat build
-- **WHEN** workflow CI berjalan
-- **THEN** unit test untuk hit-testing dan pembacaan JSON dieksekusi sebelum APK diproduksi
+#### Scenario: Unit test lulus sebelum APK dibangun
+- **WHEN** workflow berjalan pada push ke main
+- **THEN** step `./gradlew test` berhasil (seluruh unit test `:kit-core` lulus) sebelum step `./gradlew assembleDebug`
 
-#### Scenario: Kegagalan unit test menghentikan build
-- **WHEN** satu atau lebih unit test gagal
-- **THEN** proses build berhenti dan workflow ditandai gagal
+#### Scenario: Kegagalan unit test menghentikan build APK
+- **WHEN** ada unit test `:kit-core` yang gagal
+- **THEN** workflow berhenti sebelum membangun APK dan ditandai gagal
 
-### Requirement: Build menyertakan suara dummy placeholder
-Workflow build SHALL memastikan 10 file WAV dummy (nada sintetik berfrekuensi berbeda) tersedia di dalam APK sehingga aplikasi dapat langsung dibunyikan dan diuji saat pertama kali diinstal, sebelum aset rekaman kendang asli tersedia.
+### Requirement: Build melaporkan kegagalan kompilasi dengan jelas
+Jika proses kompilasi (Kotlin atau C++ NDK) gagal, workflow SHALL ditandai sebagai gagal (exit code non-zero) dengan log yang membantu developer mengidentifikasi baris dan file yang menjadi penyebab kegagalan.
 
-#### Scenario: APK hasil build langsung bisa berbunyi
-- **WHEN** APK hasil build diinstal di perangkat Android dan pemain mengetuk zona kendang
-- **THEN** suara terdengar (nada dummy) tanpa memerlukan aset tambahan dari luar APK
+#### Scenario: Kegagalan compile C++ dilaporkan di log CI
+- **WHEN** kode C++ NDK mengandung kesalahan sintaks atau error linker
+- **THEN** log GitHub Actions menampilkan pesan error dengan nama file dan nomor baris yang menyebabkan kegagalan
+
+### Requirement: Dependensi Oboe ditarik via Maven Prefab, bukan git submodule
+CI SHALL menarik dependensi Oboe dari Maven Central menggunakan Prefab, bukan melalui git submodule, agar build deterministik dan tidak memerlukan kompilasi source Oboe dari nol di setiap run.
+
+#### Scenario: Build pertama CI berhasil resolve Oboe dari Maven
+- **WHEN** workflow berjalan untuk pertama kali pada repositori baru
+- **THEN** Oboe berhasil diunduh dari Maven Central dan tidak ada step kompilasi source Oboe
+
+### Requirement: Cache Gradle mempercepat build berikutnya
+Workflow SHALL mengaktifkan cache Gradle (`cache: gradle` pada action `setup-java`) agar dependensi tidak diunduh ulang pada setiap run dan waktu build berkurang secara signifikan pada push berikutnya.
+
+#### Scenario: Build kedua lebih cepat dari build pertama
+- **WHEN** workflow berjalan untuk kedua kalinya dengan dependensi yang sama
+- **THEN** cache Gradle digunakan dan build selesai lebih cepat dibanding run pertama
