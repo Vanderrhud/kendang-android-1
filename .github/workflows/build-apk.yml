@@ -1,0 +1,78 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - 'openspec/**'
+      - '**/*.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apk-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: gradle
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      - name: Run unit tests and built-in kit validation
+        run: ./gradlew test
+
+      - name: Build release variant without signing
+        run: ./gradlew assembleRelease --stacktrace
+
+      - name: Verify release APK has no developer mode code
+        run: |
+          set -euo pipefail
+          release_apk="$(find app/build/outputs/apk/release -name '*.apk' -print -quit)"
+          if [ -z "$release_apk" ]; then
+            echo "Release APK not found" >&2
+            exit 1
+          fi
+
+          workdir="$(mktemp -d)"
+          unzip -q "$release_apk" 'classes*.dex' -d "$workdir"
+
+          if grep -R -a -E 'com/vrkendang/kitauthoring|KitAuthoring|ModeDeveloper' "$workdir"; then
+            echo "Developer mode code found in release APK" >&2
+            exit 1
+          fi
+
+      - name: Upload test reports on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_attempt }}-${{ github.sha }}
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+      - name: Build debug APK
+        run: ./gradlew assembleDebug --stacktrace
+
+      - name: Set short SHA
+        id: vars
+        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: VRKendang-Debug-${{ steps.vars.outputs.short_sha }}
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7

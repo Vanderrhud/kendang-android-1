@@ -2,7 +2,7 @@
 
 ## Why
 
-Belum ada aplikasi kendang dangdut Android yang membagi satu kulit kendang menjadi beberapa zona akustik realistis (seperti karakter pukulan pada instrumen fisik), dengan latensi audio serendah mungkin dan arsitektur kit yang sepenuhnya berbasis data sehingga posisi, ukuran, suara, dan volume dapat diubah tanpa build ulang. **VR Kendang** adalah aplikasi instrumen musik tahap awal yang difokuskan untuk pengujian dan penyempurnaan internal secara langsung di perangkat fisik oleh developer/pemilik produk (bukan rilis publik langsung). Fondasi aplikasi dibangun dari nol dengan arsitektur kit data-driven dan alat penyusun kit (Mode Developer) yang menjadi instrumen paling krusial: developer dapat langsung memasang file sampel rekaman kendang asli (WAV) dari penyimpanan HP ke tiap zona, menguji responsivitas instrumen, dan menyempurnakan tata letak tanpa terhambat siklus build ulang.
+Belum ada aplikasi kendang dangdut Android yang membagi satu kulit kendang menjadi beberapa zona akustik realistis (seperti karakter pukulan pada instrumen fisik), dengan latensi audio serendah mungkin dan arsitektur kit yang sepenuhnya berbasis data sehingga posisi, ukuran, suara, dan volume dapat diubah tanpa build ulang. **VR Kendang** adalah aplikasi instrumen musik tahap awal yang difokuskan untuk pengujian dan penyempurnaan internal secara langsung di perangkat fisik oleh developer/pemilik produk (bukan rilis publik langsung). Fondasi aplikasi dibangun dari nol dengan arsitektur kit data-driven dan alat penyusun kit (Mode Developer) yang menjadi instrumen paling krusial: kit bawaan MVP disertakan tanpa suara (semua zona `sound: null`); rekaman kendang asli dari pemilik produk dipasang kemudian langsung dari HP lewat Mode Developer untuk menguji responsivitas instrumen, latensi, dan menyempurnakan tata letak tanpa terhambat siklus build ulang.
 
 ## What Changes
 
@@ -11,21 +11,23 @@ Belum ada aplikasi kendang dangdut Android yang membagi satu kulit kendang menja
 - Aplikasi difokuskan sebagai fondasi tahap awal untuk pengujian internal mandiri di HP fisik; tidak ada target rilis Play Store di MVP ini.
 
 **Audio**
-- Mengimplementasikan mesin audio berbasis **Oboe (C++ NDK)** dengan Voice Pool 32 suara simultan, Voice Stealing, master gain/limiter untuk mencegah clipping, dan Fast Audio Path otomatis sesuai hardware.
-- Stream Oboe dibuka pada sample rate native perangkat; sample WAV di-resample satu kali di sisi C++ saat stream dibuka (dan dibuat ulang bila stream dibuka ulang).
-- Jalur trigger dari thread UI ke audio callback memakai antrean lock-free.
-- Menetapkan target latensi: keluaran audio ≤ 20 ms dan sentuh-ke-bunyi total ≤ 40 ms pada perangkat dengan jalur low-latency (target pengukuran manual, bukan syarat lulus CI).
-- Penanganan zona tanpa suara: zona yang belum memiliki file suara (unassigned) diperlakukan secara aman (*graceful silence*, sentuhan tidak memicu playback dan zero crash).
-- Siklus hidup audio: pause/resume stream saat aplikasi ke background, reconnect otomatis saat headphone dicolok/dicabut.
+- Mengimplementasikan mesin audio berbasis **Oboe (C++ NDK)** dengan Voice Pool hingga 32 suara simultan tanpa saling memotong, Voice Stealing saat > 32 suara (micro-fade-out 1 ms), perkalian gain zona (0.0–2.0), dan master limiter untuk mencegah clipping keras.
+- Audio callback aman real-time: tidak melakukan alokasi memori dinamis, tidak menggunakan mutex, dan tidak memanggil JNI. Trigger dari thread UI masuk lewat antrean lock-free single-producer/single-consumer (SPSC).
+- Kepemilikan data PCM disalin ke memori C++ sendiri saat load, sehingga Kotlin bebas melepas buffer setelah pemanggilan selesai. Kotlin mengurai header WAV menggunakan `WavParser` di `:kit-core` (WAV PCM 16-bit mono); C++ tidak mengurai format kontainer WAV.
+- Stream Oboe dibuka tanpa menetapkan sample rate tetap; sample rate native yang diberikan stream dibaca dan dijadikan target resampling PCM dari PCM asli. Bila stream dibuka ulang dan rate berubah, sample di-resample ulang dari PCM asli dan pitch tetap benar.
+- Menetapkan target latensi: keluaran audio ≤ 20 ms dan sentuh-ke-bunyi total ≤ 40 ms pada perangkat dengan jalur low-latency (target pengukuran manual, bukan syarat lulus CI). Pada Android 8.0 (API 26), stream secara otomatis memakai OpenSL ES dan tetap meminta mode LowLatency.
+- Penanganan zona tanpa suara: zona yang belum memiliki file suara (unassigned/null) diperlakukan secara aman (*graceful silence*, sentuhan tidak memicu playback dan zero crash). Bila satu file WAV gagal dimuat, zona diperlakukan sebagai tanpa suara, galat dicatat, dan aplikasi tidak crash.
+- Siklus hidup audio: saat stream dijeda (pause) ketika ke background, semua voice aktif dihentikan agar tidak ada bunyi menggantung saat resume; reconnect otomatis saat headphone dicolok/dicabut.
 
 **Tampilan dan interaksi**
 - `KendangBoardView`: satu Custom View yang merender seluruh kendang dan menangani semua multi-touch secara terpusat.
-- Hit-testing berbasis matematika murni (aljabar), dapat diuji unit test di CI.
+- Hit-testing berbasis matematika murni (aljabar), dapat diuji unit test di CI. Sentuhan zona (dengan atau tanpa suara) menampilkan visual tap highlight.
 - Daftar kit di aplikasi: pemain memilih dari kit yang tersedia (MVP: satu kit awal New Metro; arsitektur sudah mendukung banyak kit).
 - `FLAG_KEEP_SCREEN_ON`, Immersive Sticky Mode, orientasi landscape terkunci.
 
 **Data kit**
-- Format `kit.json` modular dan data-driven (skema pada design.md D11): kanvas relatif, posisi dan ukuran tiap kendang, parameter busur pembatas Bass, nama file suara (boleh null bila belum dipasang), dan `gain` (volume) per zona.
+- Format `kit.json` modular dan data-driven (skema pada bagian "Skema `kit.json` dan paket `.vrkendang`" di design.md): kanvas relatif, posisi dan ukuran tiap kendang, parameter busur pembatas Bass, nama file suara (boleh null bila belum dipasang, seperti kit baru yang awalnya kosong), dan `gain` (volume) per zona (rentang 0.0–2.0).
+- Validasi ketat di `:kit-core`: bila `sound` tidak null, file harus ada, bukan path absolut, tidak mengandung `..`, dan berformat WAV PCM 16-bit mono valid.
 - Kit awal bawaan (`new-metro`) membawa konfigurasi tata letak dan zona di `assets/kits/new-metro/kit.json` tanpa menyertakan aset WAV bawaan di dalam APK.
 - Format paket kit satu file berekstensi **`.vrkendang`** (zip berisi `kit.json` dan `sounds/*.wav`) untuk ekspor/impor oleh developer.
 
@@ -34,27 +36,27 @@ Belum ada aplikasi kendang dangdut Android yang membagi satu kulit kendang menja
 - Tombol simpan menyimpan tata letak pemain sebagai *layout override* kecil per kit di penyimpanan internal aplikasi. Kit yang dimuat adalah kit bawaan yang digabung dengan override tersebut. Tersedia tombol "Reset ke bawaan".
 
 **Mode developer (krusial untuk pengujian internal, hanya di build debug)**
-- Mode developer memberi kendali penuh dan menjadi instrumen utama developer untuk menguji aplikasi: membuat kit baru, mengubah posisi, ukuran, parameter busur Bass, volume per zona, serta memasang dan mengganti file suara per zona langsung dari penyimpanan HP.
-- Alur kerja suara dari HP: developer memilih file audio berformat **WAV PCM** (16-bit) via Android System File Picker (`ACTION_OPEN_DOCUMENT`), disalin ke direktori kerja aplikasi, langsung di-load ke C++ engine, dan bisa langsung dimainkan serta diuji seketika.
-- Ekspor/impor: kit yang telah disempurnakan dapat disimpan/diekspor menjadi paket file tunggal `.vrkendang` ke penyimpanan HP.
+- Mode developer memberi kendali penuh dan menjadi instrumen utama developer untuk menguji aplikasi: membuat kit baru (seluruh zona awalnya tanpa suara), mengubah posisi, ukuran, parameter busur Bass, volume per zona, serta memasang dan mengganti file suara per zona langsung dari penyimpanan HP.
+- Alur kerja suara dari HP: developer memilih file audio berformat **WAV PCM 16-bit mono** via Android System File Picker (`ACTION_OPEN_DOCUMENT`), disalin ke direktori kerja aplikasi, diurai oleh `WavParser`, langsung di-load ke C++ engine, dan bisa langsung dimainkan serta diuji seketika.
+- Ekspor/impor: kit yang telah disempurnakan dapat disimpan/diekspor menjadi paket file tunggal `.vrkendang` ke penyimpanan HP; "Simpan" menimpa file sumber lewat URI berizin persisten, sedangkan "Simpan Sebagai" selalu membuat file baru.
 - Kit bawaan dapat dibuka di mode developer sebagai salinan kerja; menyimpannya menghasilkan file `.vrkendang` (kit di dalam APK tidak pernah ditimpa).
 - Kode mode developer berada di source set `debug`; APK release tidak membawa kode ini. Tidak ada cadangan otomatis (`.bak`) saat menimpa file kit.
-- Impor kit melakukan validasi ketat (struktur `kit.json`, keberadaan dan format WAV PCM, rentang nilai) serta perlindungan path traversal saat mengekstrak zip.
+- Impor kit melakukan validasi ketat (struktur `kit.json`, keberadaan dan format WAV PCM 16-bit mono, rentang nilai) serta perlindungan path traversal saat mengekstrak zip.
 
 **Aset dan CI**
-- Tidak ada generator nada dummy sintetis di Gradle dan tidak ada file WAV bawaan di APK; build Gradle bersih, cepat, dan deterministik.
-- GitHub Actions membangun APK debug otomatis pada setiap push ke `main`, memakai Oboe via Prefab (bukan git submodule); unit test `:kit-core` berjalan di workflow.
+- Kit bawaan MVP New Metro hanya berisi `kit.json` dengan semua zona `"sound": null`; tidak ada task build yang menghasilkan file WAV, dan file WAV kit bawaan hanya berasal dari file yang di-commit developer di `assets/kits/<kitId>/sounds/`.
+- GitHub Actions membangun APK debug otomatis pada setiap push ke `main` dan dapat dipicu manual; memakai Oboe via Prefab (bukan git submodule) dengan versi alat yang dipatok, APK debug ditandatangani dengan keystore debug tetap, varian release dikompilasi dan diperiksa agar tidak memuat kode Mode Developer, ABI dibatasi ke `arm64-v8a` dan `armeabi-v7a`, serta unit test `:kit-core` (termasuk parser JSON, validasi skema, hit-testing, `WavParser`, dan validasi seluruh `kit.json` bawaan) berjalan di workflow.
 
 ## Capabilities
 
 ### New Capabilities
 
-- `kendang-board`: Tampilan dan interaksi papan kendang: rendering seluruh kulit kendang sebagai kesatuan visual, multi-touch terpusat, hit-testing zona akustik per kendang, animasi umpan balik sentuhan.
-- `audio-engine`: Mesin audio Oboe C++ NDK: pemuatan WAV ke memori (kepemilikan data di C++), resampling ke rate stream, Voice Pool 32 slot, Voice Stealing, master gain/limiter, antrean trigger lock-free, penanganan zona hening aman, Fast Audio Path, siklus hidup audio.
-- `kit-data`: Sistem data kit: skema `kit.json` (mendukung zona tanpa suara), koordinat kanvas relatif, model kit, validasi, pembacaan kit bawaan dari `assets/kits/`, daftar kit, penggabungan layout override pemain, format paket `.vrkendang`.
+- `kendang-board`: Tampilan dan interaksi papan kendang: rendering seluruh kulit kendang sebagai kesatuan visual, multi-touch terpusat, hit-testing zona akustik per kendang, animasi umpan balik sentuhan (termasuk pada zona tanpa suara).
+- `audio-engine`: Mesin audio Oboe C++ NDK: pemuatan data PCM ke memori (C++ memiliki memori sendiri), resampling ke rate stream native, Voice Pool 32 slot, Voice Stealing, gain per zona (0.0–2.0) + master limiter, antrean trigger SPSC lock-free (callback bebas alokasi, mutex, dan JNI), penanganan zona hening aman, Fast Audio Path (OpenSL ES otomatis di API 26), siklus hidup audio (voice dimatikan saat pause, reconnect audio).
+- `kit-data`: Sistem data kit: skema `kit.json` (mendukung zona tanpa suara `sound: null`), `WavParser` (PCM 16-bit mono) di `:kit-core`, koordinat kanvas relatif, model kit, validasi, pembacaan kit bawaan dari `assets/kits/`, daftar kit, penggabungan layout override pemain, format paket `.vrkendang`.
 - `calibration-mode`: Mode edit tata letak untuk pemain: geser posisi dan ubah ukuran kendang, simpan sebagai layout override, reset ke bawaan.
-- `kit-authoring`: Alat penyusun kit khusus developer (sangat krusial untuk fase pengujian awal, hanya build debug): buat kit baru, ubah posisi/ukuran/parameter Bass/volume, pasang file suara WAV PCM langsung dari penyimpanan HP, impor dan ekspor `.vrkendang` lewat pemilih file sistem, simpan dengan menimpa file kit, buka kit bawaan sebagai salinan kerja.
-- `ci-build`: Infrastruktur build dan CI: GitHub Actions untuk APK debug otomatis, Oboe via Prefab Maven, unit test `:kit-core` (hit-testing, parser, validator, pembaca paket termasuk uji path traversal, penggabungan override) di workflow.
+- `kit-authoring`: Alat penyusun kit khusus developer (sangat krusial untuk fase pengujian awal, hanya build debug): buat kit baru (awal kosong), mode papan UJI/EDIT, ubah posisi/ukuran/parameter Bass/volume, pasang file suara WAV PCM langsung dari penyimpanan HP, impor dan ekspor `.vrkendang` lewat pemilih file sistem, simpan ke file sumber atau Simpan Sebagai ke file baru, buka kit bawaan sebagai salinan kerja.
+- `ci-build`: Infrastruktur build dan CI: GitHub Actions untuk APK debug otomatis dan build manual, keystore debug tetap, versi alat dipatok, ABI `arm64-v8a`/`armeabi-v7a`, pemeriksaan release tanpa kode Mode Developer, laporan tes saat gagal, Oboe via Prefab Maven, unit test `:kit-core` (hit-testing, parser, validator, pembaca paket termasuk uji path traversal, WavParser, penggabungan override) di workflow.
 
 ### Modified Capabilities
 
@@ -70,5 +72,5 @@ Belum ada aplikasi kendang dangdut Android yang membagi satu kulit kendang menja
 - **Minimum API:** Android 8.0 (API 26). AAudio tersedia mulai Android 8.1 (API 27); pada API 26 Oboe otomatis memakai OpenSL ES.
 - **Orientasi:** landscape saja, dikunci di level Activity.
 - **Penyimpanan:** kit bawaan di APK `assets/`; layout override pemain di penyimpanan internal aplikasi; file suara WAV dan paket `.vrkendang` developer diakses lewat pemilih file sistem (Storage Access Framework), tanpa izin storage khusus.
-- **Aset suara:** APK tidak menyertakan file WAV bawaan. Semua suara dimasukkan langsung dari penyimpanan HP oleh developer dalam format WAV PCM via pemilih file sistem.
-- **Cakupan dikembangkan bertahap:** inti yang bisa dimainkan (audio, board, kit bawaan, CI) dibangun lebih dulu; alat penyusun kit (`kit-authoring`) menyusul setelah inti stabil.
+- **Aset suara:** Kit bawaan MVP (`new-metro`) disertakan tanpa file suara (semua zona `sound: null`). Suara rekaman kendang asli dipasang kemudian oleh developer/pemilik produk langsung dari penyimpanan HP via Mode Developer dalam format WAV PCM 16-bit mono.
+- **Cakupan dikembangkan bertahap:** inti papan kendang dan engine audio dibangun lebih dulu, diikuti fitur minimal pasang suara di Mode Developer agar audio engine dan latensi dapat diuji langsung di perangkat fisik.

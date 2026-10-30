@@ -15,16 +15,17 @@ VR Kendang adalah aplikasi Android baru dari nol yang difokuskan sebagai instrum
 **Goals:**
 - Arsitektur tiga lapisan dengan ketergantungan searah: Data Kit (JSON) → Tampilan & Touch (Kotlin) → Audio (C++/Oboe).
 - Semua logika hitung dan data (hit-testing, parsing, validasi, paket kit, penggabungan override) berada di modul `:kit-core` (Kotlin/JVM murni) agar bisa diuji JVM unit test di CI, dan larangan `android.*` ditegakkan compiler.
-- Build CI yang andal memakai Oboe via Prefab Maven, tanpa git submodule, dan tanpa ketergantungan pada generator audio sintetis.
+- Build CI yang andal memakai Oboe via Prefab Maven, tanpa git submodule, dan tanpa task build yang membuat file WAV.
 - Alat penyusun kit di Mode Developer agar suara WAV dapat dipasangkan langsung dari penyimpanan HP ke tiap zona dan dapat langsung dibunyikan seketika tanpa coding dan tanpa build ulang.
 
 **Non-Goals:**
 - Tanda tangan rilis dan publikasi ke Play Store (VR Kendang adalah instrumen pengujian internal pada fase ini).
-- Penyertaan aset audio bawaan atau generator nada dummy di dalam APK (APK dibangun bersih tanpa audio bawaan; pengujian memakai sampel suara mandiri dari HP).
+- Penyertaan aset audio bawaan di dalam APK (APK dibangun bersih tanpa audio bawaan; pengujian memakai sampel suara mandiri dari HP).
 - Dukungan iOS, Flutter, atau lintas platform.
 - Sinkronisasi kit lewat jaringan (OTA), dan berbagi kit online antar pemain.
 - Integrasi ad SDK (ruang header disiapkan, tidak diintegrasikan).
 - Cadangan otomatis (`.bak`) saat developer menimpa file kit (keputusan pemilik produk).
+- Menambah atau menghapus kendang/zona di Mode Developer pada MVP; struktur kit tetap 4 kendang dari template dan perubahan struktur dicatat sebagai pekerjaan lanjutan.
 
 ## Decisions
 
@@ -48,23 +49,33 @@ VR Kendang adalah aplikasi Android baru dari nol yang difokuskan sebagai instrum
 
 ---
 
-### D3: Voice Pool pre-alokasi, Voice Stealing, master limiter, dan penanganan zona tanpa suara
+### D3: Voice Pool pre-alokasi, Voice Stealing, master limiter, dan audio callback aman real-time
 
-**Keputusan:** Mesin audio C++ memakai pool 32 slot suara yang dialokasikan saat inisialisasi. Audio callback tidak pernah memanggil `malloc`/`new`. Saat semua slot terisi, slot tertua diambil alih (voice stealing) dengan micro-fade-out 1 ms untuk mencegah bunyi pop. Hasil penjumlahan semua voice melewati master gain dan limiter sederhana (soft clip) sebelum ditulis ke buffer keluaran.
+**Keputusan:** Mesin audio C++ memakai Voice Pool hingga 32 suara simultan yang dialokasikan saat inisialisasi tanpa ada suara yang saling memotong. Ketika melebihi 32 suara aktif, berlaku Voice Stealing di mana slot tertua diambil alih dengan micro-fade-out 1 ms untuk mencegah bunyi pop.
 
-**Penanganan zona tanpa suara:** Bila suatu zona kendang belum dipasangi file suara (unassigned / null), event sentuhan pada zona tersebut diabaikan secara aman (*graceful silence*) tanpa memicu alokasi atau playback, sehingga aplikasi dijamin zero-crash saat disentuh sebelum suara dipasangkan.
+**Audio callback aman real-time:** Callback tidak boleh melakukan alokasi memori dinamis (`malloc`/`new`), tidak boleh memakai mutex/locking, dan tidak memanggil JNI. Trigger dari thread UI masuk lewat antrean lock-free single-producer/single-consumer (SPSC ring buffer berukuran tetap). Callback hanya membaca antrean dan memulai voice tanpa lock atau alokasi.
 
-**Alasan:** Menjamin eksekusi callback stabil dan deterministik di thread real-time prioritas tinggi serta aman saat instrumen baru pertama kali dibuka sebelum kit dikonfigurasi.
+**Gain per zona dan master limiter:** Tiap voice dikalikan dengan gain zona masing-masing (rentang 0.0–2.0). Hasil penjumlahan seluruh voice aktif melewati master limiter sederhana (soft clip) sebelum ditulis ke buffer keluaran agar tidak menghasilkan distorsi clipping keras meskipun banyak voice aktif dengan gain tinggi.
+
+**Siklus hidup (Pause):** Saat stream dijeda (pause) ketika aplikasi ke background, semua voice aktif dihentikan agar tidak ada bunyi menggantung saat kembali (resume).
+
+**Penanganan zona tanpa suara:** Bila suatu zona kendang belum dipasangi file suara (`sound == null` / unassigned), sentuhan pada zona tersebut diabaikan secara aman (*graceful silence*) tanpa memicu alokasi atau playback, tanpa suara, dan dijamin zero-crash.
+
+**Alasan:** Menjamin eksekusi callback stabil dan deterministik di thread real-time prioritas tinggi, aman dari dead-lock atau audio glitch, serta aman saat instrumen baru pertama kali dibuka sebelum kit dikonfigurasi.
 
 ---
 
-### D4: Kotlin membaca WAV → DirectByteBuffer → C++ menyalin dan memiliki data
+### D4: Pembacaan header WAV di `:kit-core` (`WavParser`), DirectByteBuffer, dan C++ menyalin serta memiliki data
 
-**Keputusan:** Kotlin membaca WAV (dari direktori kerja cache developer atau paket kit) menjadi `DirectByteBuffer` dan menyerahkan pointer-nya ke C++ lewat JNI. **C++ menyalin PCM ke memori miliknya sendiri selama pemanggilan load berlangsung**, sehingga setelah pemanggilan kembali Kotlin bebas melepas buffer. C++ tidak pernah menyimpan pointer ke buffer milik Kotlin.
+**Keputusan:** Sebuah `WavParser` (Kotlin murni) di modul `:kit-core` memeriksa header RIFF/WAVE, mengharuskan format PCM 16-bit mono, lalu mengirimkan byte PCM beserta sample rate aslinya ke C++ lewat JNI. C++ tidak mengurai file WAV.
 
-**Resampling:** stream Oboe dibuka dengan sample rate native perangkat. C++ menyimpan PCM asli, lalu membuat salinan yang di-resample ke rate stream satu kali saat stream dibuka memakai interpolasi berkualitas baik (offline process). Bila stream dibuka ulang (misalnya saat headphone dicolok/dicabut) dan rate berubah, salinan dibuat ulang dari PCM asli.
+**Kepemilikan data sample:** C++ menyalin data PCM ke memorinya sendiri saat pemanggilan load berlangsung. Setelah pemanggilan load kembali ke Kotlin, Kotlin bebas melepas buffer, dan C++ tidak pernah menyimpan pointer ke buffer milik Kotlin.
 
-**Alasan:** Pemisahan kepemilikan yang bersih: Kotlin berurusan dengan file I/O dan Storage Access Framework, sedangkan C++ murni mengelola memori audio dan playback real-time tanpa risiko dangling pointer.
+**Resampling native & reconnect:** Stream Oboe dibuka tanpa menetapkan sample rate tertentu, lalu sample rate native yang diberikan stream dibaca dan dipakai sebagai target resampling. C++ menyimpan PCM asli, lalu membuat salinan yang di-resample ke rate stream memakai interpolasi linier. Bila stream dibuka ulang (misalnya saat headphone dicolok/dicabut) dan rate berubah, sample di-resample ulang dari PCM asli dan pitch tetap benar.
+
+**Penanganan kegagalan memuat WAV:** Bila satu file WAV gagal dimuat, zona tersebut diperlakukan sebagai zona tanpa suara (unassigned), galat dicatat ke log, dan aplikasi tidak crash.
+
+**Alasan:** Pemisahan tanggung jawab yang bersih: Kotlin berurusan dengan file I/O, parsing WAV, dan validasi format, sedangkan C++ murni mengelola memori audio dan playback real-time tanpa risiko dangling pointer atau crash akibat format file rusak.
 
 ---
 
@@ -105,55 +116,53 @@ Rumus:
   - Area utama (Bass-1): di dalam oval Bass DAN di dalam lingkaran pembatas `C_div`.
   - Area bulan sabit (Bass-2 hingga Bass-5): di dalam oval Bass DAN di luar `C_div`; posisi `Y` membagi rentang vertikal oval Bass menjadi 4 bilah sama tinggi (`band` 0-3, dari atas ke bawah).
   - `C_div` didefinisikan **relatif terhadap radius Bass**: pusat `(cx + dx·rx, cy + dy·ry)` dan radius `r·rx`. Dengan begitu busur ikut berskala saat Bass diperbesar atau diperkecil.
-- **Model `split` (Sedang, Kecil 2):** dalam oval, bandingkan `Y` dengan `cy`: `upper` bila `Y < cy`, `lower` bila sebaliknya.
-- **Model `single` (Kecil 1):** dalam oval, langsung zona tunggal.
+- **Model `split` (Sedang, Kecil 2):** dalam oval, bandingkan `Y` dengan `cy`: `upper` bila `Y < cy`, `lower` bila sebaliknya (`Y >= cy`, termasuk `Y == cy`). Pemetaan zona: Sedang-1 = `lower`, Sedang-2 = `upper`; Kecil2-1 = `lower`, Kecil2-2 = `upper`.
+- **Model `single` (Kecil 1):** dalam oval, langsung zona tunggal (Kecil1-1).
 
 **Urutan evaluasi:** mengikuti urutan elemen array `drums` di `kit.json` (indeks kecil dicek lebih dulu). Untuk New Metro: Bass → Kecil 1 → Sedang → Kecil 2. Bila tidak ada yang cocok, sentuhan diabaikan.
 
 ---
 
-### D8: Penyimpanan, empat lokasi dengan peran berbeda
+### D8: Penyimpanan
 
 **Keputusan:**
 
 | Data | Lokasi | Akses |
 |---|---|---|
-| Kit bawaan | `assets/kits/<kitId>/kit.json` di APK | hanya baca (konfigurasi tata letak awal, tanpa file WAV) |
+| Kit bawaan | `assets/kits/<kitId>/` di APK (`kit.json` dan `sounds/` bila ada) | hanya baca (konfigurasi tata letak awal) |
 | Layout override pemain | penyimpanan internal aplikasi, `files/layouts/<kitId>.json` | baca/tulis oleh aplikasi |
-| Salinan kerja developer | `cacheDir/dev-kit/` (direktori kerja kit yang sedang disunting) | hanya build debug |
+| Salinan kerja developer | `filesDir/dev-kit/` (direktori kerja kit yang sedang disunting) | hanya build debug |
 | File suara WAV & `.vrkendang` developer | dipilih lewat Storage Access Framework (`ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT`) | hanya build debug |
 
-**Alasan:** Bebas izin runtime penyimpanan kompleks (`READ/WRITE_EXTERNAL_STORAGE` atau `MANAGE_EXTERNAL_STORAGE`), mematuhi arsitektur modern Android, dan memberikan akses langsung ke file audio yang dimiliki pengguna di memori HP.
+**Alasan:** Bebas izin runtime penyimpanan kompleks (`READ/WRITE_EXTERNAL_STORAGE` atau `MANAGE_EXTERNAL_STORAGE`), mematuhi arsitektur modern Android, dan memberikan akses langsung ke file audio yang dimiliki pengguna di memori HP. Salinan kerja disimpan di `filesDir/dev-kit/` (bukan `cacheDir`) agar tidak dibersihkan sistem saat penyimpanan menipis.
 
 ---
 
-### D9: Pengelolaan suara mandiri dari penyimpanan HP (tanpa audio bawaan di APK)
+### D9: GitHub Actions, Ubuntu latest, JDK 17 Temurin, cache Gradle
 
-**Keputusan:** APK dibangun **tanpa membawa file audio WAV bawaan dan tanpa generator nada sintetis di Gradle**.
-1. Semua sampel suara dimasukkan oleh developer langsung dari penyimpanan HP melalui Android System File Picker (`ACTION_OPEN_DOCUMENT`).
-2. Format yang didukung: **WAV PCM (16-bit, mono/stereo)**.
-3. Saat file WAV dipilih untuk suatu zona, aplikasi menyalin stream audio ke direktori kerja developer (`cacheDir/dev-kit/sounds/<zoneId>.wav`), lalu memicu audio engine C++ untuk memuatnya ke memori. Zona tersebut langsung aktif dan bisa dimainkan seketika.
-4. Zona yang belum dipasangi file suara tetap aman dimainkan (silent playback, tanpa crash).
+**Keputusan:** `ubuntu-latest`, `actions/setup-java@v4` (distribusi `temurin`, JDK 17), `cache: gradle`. Workflow juga menyediakan `workflow_dispatch` agar build dapat dipicu manual dari halaman GitHub Actions.
 
-**Alasan:** Menghilangkan kompleksitas generator nada sintetis di CI, mempercepat build, dan memungkinkan pengujian menggunakan sampel kendang asli di tangan developer secara instan.
+**Pemicu, izin, dan concurrency:** Push ke `main` memicu build, kecuali push yang hanya mengubah dokumen (`openspec/**`, `**/*.md`); perubahan di `assets/kits/**` tetap memicu build. Workflow memakai `permissions: contents: read`, dan `concurrency` membatalkan run lama saat push baru masuk.
 
----
+**Versi dipatok:** Versi Oboe eksak (bukan rentang atau `latest`), `ndkVersion`, versi CMake, dan versi Android Gradle Plugin dipatok eksak di konfigurasi Gradle. Action GitHub dipatok ke mayor: `actions/checkout@v4`, `actions/setup-java@v4`, `actions/upload-artifact@v4`.
 
-### D10: GitHub Actions, Ubuntu latest, JDK 17 Temurin, cache Gradle
+**ABI:** Build menghasilkan `arm64-v8a` dan `armeabi-v7a`; `x86_64` tidak dibangun. Alasannya, pengujian dilakukan hanya di HP atau tablet fisik berbasis ARM dan membatasi ABI mengurangi ukuran APK serta waktu build; pengujian tidak menggunakan emulator.
 
-**Keputusan:** `ubuntu-latest`, `actions/setup-java@v4` (distribusi `temurin`, JDK 17), `cache: gradle`.
+**Keystore debug tetap:** APK debug ditandatangani dengan `app/debug.keystore` melalui `signingConfigs.debug`, sehingga APK dari build berbeda dapat dipasang sebagai pembaruan tanpa uninstall. Ini kunci debug yang tidak rahasia; penandatanganan rilis tetap non-goal.
 
 **Langkah workflow:**
 1. Checkout repository
-2. Setup Java 17 (Temurin)
+2. Setup Java 17 (Temurin) dengan cache Gradle
 3. `chmod +x gradlew`
-4. `./gradlew test` (unit test `:kit-core`: hit-testing, parser, validator, pembaca paket termasuk uji path traversal, penggabungan override)
-5. `./gradlew assembleDebug --stacktrace`
-6. Upload `app-debug.apk` sebagai artifact (retensi 7 hari)
+4. `./gradlew test` (unit test `:kit-core`: hit-testing, parser, validator, pembaca dan penyusun paket termasuk uji path traversal dan batas keamanan ZIP, pembuat kit dari template, penggabungan override, WavParser, serta validasi integritas seluruh `kit.json` bawaan; lokasi `assets/kits` diberikan lewat `systemProperty` Gradle dan tes gagal bila tidak menemukan kit)
+5. `./gradlew assembleRelease --stacktrace` (tanpa penandatanganan), lalu periksa dex APK release untuk memastikan tidak ada kelas atau paket Mode Developer (misalnya `com/vrkendang/kitauthoring`) menggunakan `apkanalyzer dex packages` atau `unzip -p` + `grep`
+6. Bila langkah test gagal, unggah `**/build/reports/tests/**` sebagai artifact dengan `if: failure()`
+7. `./gradlew assembleDebug --stacktrace`
+8. Unggah `app-debug.apk` sebagai artifact `VRKendang-Debug-<sha7>` dengan retensi 7 hari
 
 ---
 
-### D11: Skema `kit.json` dan paket `.vrkendang`
+### D10: Skema `kit.json` dan paket `.vrkendang`
 
 **Paket `.vrkendang`:** file zip biasa (tanpa enkripsi atau pengacakan) berisi:
 ```
@@ -161,8 +170,15 @@ kit.json
 sounds/
   bass-1.wav ... kecil2-2.wav
 ```
+Paket hanya memuat file WAV yang dirujuk oleh `kit.json`, dengan nama `sounds/<zoneId>.wav`; file WAV yatim (tidak dirujuk) tidak disertakan.
 
-**Contoh `kit.json` (mendukung `sound` bernilai null bila belum dipasangi suara):**
+**Batas keamanan paket:**
+- Maksimum 100 entri dalam ZIP.
+- Total ukuran hasil ekstraksi maksimum 100 MB.
+- Ukuran maksimum tiap file WAV adalah 5 MB (karena seluruh WAV aktif dimuat ke RAM).
+- Seluruh entri ZIP diperiksa dan divalidasi strukturnya (termasuk pemeriksaan path traversal `..` dan path absolut) sebelum file apapun diekstrak atau ditulis ke penyimpanan.
+
+**Contoh `kit.json` bawaan MVP (seluruh zona berstatus unassigned / `"sound": null`):**
 
 ```json
 {
@@ -179,7 +195,7 @@ sounds/
       "radius": { "rx": 0.30, "ry": 0.30 },
       "divider": { "dx": -0.30, "dy": 0.0, "r": 0.80 },
       "zones": [
-        { "id": "bass-1", "region": "main",     "sound": "sounds/bass-1.wav", "gain": 1.0 },
+        { "id": "bass-1", "region": "main",     "sound": null, "gain": 1.0 },
         { "id": "bass-2", "region": "crescent", "band": 0, "sound": null, "gain": 1.0 },
         { "id": "bass-3", "region": "crescent", "band": 1, "sound": null, "gain": 1.0 },
         { "id": "bass-4", "region": "crescent", "band": 2, "sound": null, "gain": 1.0 },
@@ -201,8 +217,8 @@ sounds/
       "center": { "x": 0.66, "y": 0.60 },
       "radius": { "rx": 0.20, "ry": 0.20 },
       "zones": [
-        { "id": "sedang-1", "region": "upper", "sound": null, "gain": 1.0 },
-        { "id": "sedang-2", "region": "lower", "sound": null, "gain": 1.0 }
+        { "id": "sedang-1", "region": "lower", "sound": null, "gain": 1.0 },
+        { "id": "sedang-2", "region": "upper", "sound": null, "gain": 1.0 }
       ]
     },
     {
@@ -211,8 +227,8 @@ sounds/
       "center": { "x": 0.82, "y": 0.38 },
       "radius": { "rx": 0.17, "ry": 0.17 },
       "zones": [
-        { "id": "kecil2-1", "region": "upper", "sound": null, "gain": 1.0 },
-        { "id": "kecil2-2", "region": "lower", "sound": null, "gain": 1.0 }
+        { "id": "kecil2-1", "region": "lower", "sound": null, "gain": 1.0 },
+        { "id": "kecil2-2", "region": "upper", "sound": null, "gain": 1.0 }
       ]
     }
   ]
@@ -223,13 +239,14 @@ sounds/
 - `formatVersion` dikenali; `kitId` hanya huruf kecil, angka, dan tanda hubung; `drums` tidak kosong; semua `id` unik.
 - `canvasAspect` > 0; `center.x`/`center.y` di 0.0-1.0; `rx`, `ry` > 0 dan wajar (≤ 1.0).
 - `gain` di rentang 0.0-2.0.
+- Parameter `divider` model `bass`: `dx` dan `dy` di rentang -3.0 sampai 3.0 (relatif terhadap radius Bass), serta `r` > 0 dan ≤ 3.0. Rentang ini ditetapkan agar busur tetap wajar dan dapat diuji.
 - Region sesuai model (`bass`: `main` dan `crescent` dengan `band` 0-3 dan `divider` wajib; `split`: `upper` dan `lower`; `single`: `full`).
-- Kolom `sound` dapat bernilai `null` (unassigned) atau string path relatif di dalam paket. Bila bernilai string, file WAV harus ada dan berformat PCM 16-bit (sample rate bebas, di-resample oleh engine).
+- Kolom `sound` boleh bernilai `null` (zona tanpa suara). Bila `sound` tidak null: file harus ada di paket/direktori, bukan path absolut, tidak mengandung `..`, dan berformat WAV PCM 16-bit mono valid.
 - Perlindungan path traversal: menolak entri zip yang mengandung `..` atau path absolut.
 
 ---
 
-### D12: Layout override pemain (posisi dan ukuran saja)
+### D11: Layout override pemain (posisi dan ukuran saja)
 
 **Keputusan:** Edit tata letak pemain tidak menyalin file audio. Aplikasi menyimpan file kecil per kit di `files/layouts/<kitId>.json`:
 
@@ -243,37 +260,55 @@ sounds/
 }
 ```
 
-Saat kit dimuat, `LayoutOverride.apply(kit, override)` (di `:kit-core`) menghasilkan kit efektif: `center` diganti, `rx` dan `ry` dikalikan `scale`. Parameter `divider` relatif terhadap radius Bass sehingga ikut berskala otomatis. Tombol "Reset ke bawaan" menghapus file override.
+Saat kit dimuat, `LayoutOverride.apply(kit, override)` (di `:kit-core`) menghasilkan kit efektif:
+- `scale` dibatasi di rentang 0.5–1.5, dan `center` dijepit agar seluruh batas oval kendang tetap berada di dalam kanvas.
+- ID kendang yang tidak dikenal dalam file override diabaikan.
+- File override yang rusak atau tidak dapat dibaca diabaikan sehingga tata letak bawaan tetap dipakai tanpa crash.
+- Penulisan override dilakukan secara atomik (tulis ke file sementara `.tmp` lalu ganti nama) untuk mencegah kerusakan berkas bila penulisan terputus.
+- Kit efektif hasil penggabungan harus tetap lolos validasi `KitValidator`. Tombol "Reset ke bawaan" meminta konfirmasi sebelum menghapus file override.
+- Layout override pemain tidak diterapkan pada salinan kerja di Mode Developer (Mode Developer menyunting kit asli secara independen). Perubahan tata letak Mode Developer ditulis ke `kit.json` salinan kerja dan file `.vrkendang`, bukan ke `files/layouts/<kitId>.json`.
 
 ---
 
-### D13: Alat penyusun kit (Mode Developer) sangat krusial, hanya di build debug
+### D12: Alat penyusun kit hanya di build debug
 
 **Keputusan:** UI dan logika Mode Developer berada di source set `app/src/debug/`; source set `release` hanya berisi stub kosong. Mode Developer diakses dari tombol Pengaturan di build debug dan menjadi instrumen utama developer untuk menguji aplikasi di perangkat fisik.
 
+**Penyimpanan salinan kerja:** Salinan kerja disimpan di `filesDir/dev-kit/` agar tidak dibersihkan sistem seperti `cacheDir`. Kit bawaan tidak pernah diubah; membukanya menghasilkan salinan kerja baru.
+
 **Alur penyusunan kit:**
-1. **Buka salinan kerja:** Developer membuka kit (misal kit awal `new-metro` atau membuka file `.vrkendang` lewat `ACTION_OPEN_DOCUMENT`). Kit dimuat ke `cacheDir/dev-kit/`.
-2. **Pasang suara dari HP:** Developer mengetuk zona yang diinginkan, menekan tombol "Pilih Suara (WAV)", memilih file dari penyimpanan HP lewat pemilih file sistem. File disalin ke cache kerja dan langsung di-load ke C++ engine untuk diuji ketukannya seketika.
-3. **Ubah parameter:** Posisi, ukuran, busur pembatas Bass, dan `gain` per zona dapat diatur secara interaktif di layar.
-4. **Simpan/Ekspor:** Menyusun ulang seluruh paket dan menyimpan/mengekspor menjadi file `.vrkendang` (zip) via `ACTION_CREATE_DOCUMENT` atau menimpa file yang sedang dibuka.
+1. **Buka salinan kerja atau buat kit baru:** Developer dapat membuka kit bawaan (misal `new-metro`), membuka file `.vrkendang` lewat `ACTION_OPEN_DOCUMENT`, atau membuat kit baru. Kit baru meminta `name` dan `kitId` (divalidasi dan tidak boleh sama dengan `kitId` bawaan), memakai tata letak template (New Metro) dengan seluruh zona `sound: null`, lalu langsung meminta lokasi file `.vrkendang` sebagai file sumber. `kitId` tidak dapat diubah setelah dibuat; `name` boleh diubah. Membuka file `.vrkendang` mengekstrak ke direktori sementara, memvalidasi, lalu baru menggantikan salinan kerja; kegagalan tidak mengubah salinan kerja saat ini.
+2. **Dua mode papan:** Mode UJI membunyikan zona seperti pemain. Mode EDIT memilih atau menggeser kendang tanpa membunyikan suara; zona dipilih lewat panel daftar zona atau sentuhan, lalu WAV, gain, dan divider diatur dari panel. Zona terpilih diberi tanda visual.
+3. **Pasang suara dari HP:** Developer memilih zona, menekan "Pilih Suara (WAV)", dan memilih file dari penyimpanan HP. Header diperiksa oleh `WavParser` di `:kit-core` (harus PCM 16-bit mono), file disalin ke salinan kerja sebagai `sounds/<zoneId>.wav`, `kit.json` diperbarui, dan sample langsung di-load ke C++ engine untuk diuji. Opsi "Kosongkan suara" mengembalikan `sound` ke `null`. Pemuatan sample saat stream berjalan dilakukan di luar thread audio lalu ditukar secara atomik agar tidak ada glitch.
+4. **Ubah parameter:** Nama kit, posisi, ukuran (`rx`, `ry`), busur pembatas Bass, `gain` per zona, dan urutan array `drums` (prioritas hit-test) dapat diatur. Menambah atau menghapus kendang/zona bukan cakupan MVP. Semua nilai dibatasi agar `kit.json` selalu lolos `KitValidator`.
+5. **Simpan / Simpan Sebagai:** "Simpan" menimpa file sumber lewat URI yang izinnya dipersistenkan tanpa dialog; bila belum ada file sumber (kit baru atau salinan kerja kit bawaan), "Simpan" membuka pemilih lokasi dan file itu menjadi file sumber. "Simpan Sebagai" selalu meminta lokasi baru. Sebelum menulis, paket disusun penuh di cache, dibaca ulang dengan `KitPackageReader`, dan divalidasi `KitValidator`; hanya setelah itu disalin ke URI. Bila validasi/penulisan gagal, salinan kerja tidak berubah dan developer ditawari Simpan Sebagai; bila izin URI hilang atau file sumber tidak terbaca, otomatis jatuh ke Simpan Sebagai. Paket hanya memuat WAV yang dirujuk `kit.json`, dan `version` naik satu tingkat setiap penyimpanan. Tidak ada file `.bak`.
+6. **Perubahan belum disimpan:** Indikator perubahan ditampilkan; keluar dari Mode Developer, membuka kit lain, atau menutup aplikasi dengan perubahan belum disimpan meminta konfirmasi simpan/buang.
+7. **Batas override pemain:** Layout override pemain tidak diterapkan pada salinan kerja; perubahan tata letak ditulis ke `kit.json` salinan kerja dan file `.vrkendang`, bukan ke `files/layouts/<kitId>.json`.
+
+**Komponen `:kit-core`:** `KitPackageWriter` menyusun paket `.vrkendang` dan `KitFactory` membuat kit baru dari template; keduanya Kotlin/JVM murni dan diuji unit test bersama `KitPackageReader`/`KitValidator`.
 
 ---
 
-### D14: Jalur trigger sentuhan ke audio
+### D13: Jalur trigger sentuhan ke audio callback aman real-time
 
-**Keputusan:** `KendangBoardView` menjalankan hit-testing di thread UI, lalu mengirim event `(sampleId, velocity/gain)` ke audio callback lewat antrean lock-free single-producer/single-consumer (ring buffer berukuran tetap) di C++. Audio callback hanya membaca antrean dan memulai voice; tidak ada mutex, alokasi, atau panggilan JNI di dalam callback. Bila `sampleId` bernilai unassigned/invalid, event dilewati tanpa aksi.
+**Keputusan:** `KendangBoardView` menjalankan hit-testing di thread UI, lalu mengirim event `(slotIndex, gain)` ke audio callback lewat antrean lock-free single-producer/single-consumer (SPSC ring buffer berukuran tetap) di C++.
+Audio callback aman real-time: hanya membaca antrean dan memulai voice; tidak boleh ada alokasi memori dinamis (`malloc`/`new`), tidak memakai mutex/locking, dan tidak memanggil JNI di dalam callback. Bila `slotIndex` bernilai unassigned/invalid (zona tanpa suara), event dilewati tanpa aksi.
 
 ---
 
 ## Risks / Trade-offs
 
-**[Risiko] File WAV dari HP memiliki format tidak standar (misal 24-bit atau non-PCM)** → *Mitigasi:* `KitValidator` memeriksa header RIFF/WAVE saat file dipilih. Jika format bukan PCM 16-bit, aplikasi menampilkan notifikasi galat yang jelas kepada developer ("Format harus WAV PCM 16-bit") dan tidak memuat file tersebut.
+**[Verifikasi hit-testing awal]** Verifikasi hit-testing di perangkat pada awal pengujian dilakukan lewat visual feedback (highlight overlay zona), bukan lewat nada suara, karena kit awal New Metro berstatus hening (semua sound null).
 
-**[Risiko] Sentuhan pada zona yang belum memiliki suara menyebabkan crash** → *Mitigasi:* Penanganan unassigned sound secara aman di level hit-testing dan audio engine (D3 & D14): zona tanpa suara mengembalikan ID unassigned yang langsung diabaikan oleh audio callback.
+**[Pengukuran latensi audio]** Pengukuran latensi audio fisik (keluaran audio ≤ 20 ms, sentuh-ke-bunyi total ≤ 40 ms) baru dapat dilakukan setelah developer memasangkan minimal satu file WAV ke zona kendang via Mode Developer.
 
-**[Risiko] Latensi audio bervariasi antar perangkat** → *Mitigasi:* Oboe memilih AAudio atau OpenSL ES otomatis dan selalu meminta `LowLatency`; stream dibuka pada rate native. Estimasi latensi dari Oboe ditampilkan di layar debug Mode Developer.
+**[Risiko] File WAV dari HP memiliki format tidak standar (misal 24-bit atau non-PCM)** → *Mitigasi:* `WavParser` di `:kit-core` memeriksa header RIFF/WAVE saat file dipilih/dimuat. Jika format bukan PCM 16-bit mono, aplikasi menampilkan notifikasi galat yang jelas kepada developer ("Format harus WAV PCM 16-bit mono") dan tidak memuat file tersebut.
 
-**[Risiko] Clipping saat banyak voice aktif dan `gain` tinggi** → *Mitigasi:* Master gain dan limiter (soft-clip) di C++ (D3), rentang `gain` dibatasi 0.0-2.0.
+**[Risiko] Sentuhan pada zona yang belum memiliki suara menyebabkan crash** → *Mitigasi:* Penanganan unassigned sound secara aman di level hit-testing dan audio engine (D3 & D13): zona tanpa suara mengembalikan ID unassigned yang langsung diabaikan oleh audio callback.
+
+**[Risiko] Latensi audio bervariasi antar perangkat** → *Mitigasi:* Oboe memilih AAudio atau OpenSL ES otomatis (di Android 8.0 API 26 otomatis OpenSL ES) dan selalu meminta `LowLatency`; stream dibuka tanpa menetapkan sample rate tetap, lalu rate native dibaca dari stream. Estimasi latensi dari Oboe ditampilkan di layar debug Mode Developer.
+
+**[Risiko] Clipping saat banyak voice aktif dan `gain` tinggi** → *Mitigasi:* Master limiter (soft-clip) dan perkalian gain per voice di C++ (D3), rentang `gain` dibatasi 0.0-2.0.
 
 **[Trade-off] Pengguna harus memasangkan file suara sendiri pada pengujian awal** → *Diterima:* Sesuai instruksi pemilik produk, aplikasi ini adalah instrumen pengujian internal tahap awal (bukan rilis publik), sehingga pemasangan suara langsung dari HP memberikan fleksibilitas tertinggi tanpa perlu build ulang APK.
 
