@@ -35,7 +35,7 @@
 ## 4. Hit-Testing di `:kit-core`
 
 - [x] 4.1 Implementasikan `HitTester` di `:kit-core` (Kotlin murni, tanpa `android.*`) dengan fungsi `findZone(kit: KitData, canvasX: Float, canvasY: Float): ZoneData?` yang mengimplementasikan model `bass`, `split`, dan `single` dalam koordinat kanvas relatif (`X_u = x * canvasAspect`, `Y_u = y`) sesuai bagian "Geometri hit-testing, aljabar murni di `:kit-core`" di design.md — verifikasi: `./gradlew :kit-core:compileKotlin` berhasil.
-- [ ] 4.2 Tulis unit test `HitTesterTest` untuk variasi kasus batas lengkap: model `bass` (5 zona + 4 batas vertikal + tepi busur `C_div`), model `split` (Sedang & Kecil 2: atas `Y < cy`, bawah `Y >= cy`, garis tengah `Y == cy` masuk lower, luar oval), model `single` (dalam, luar), titik di area tumpang tindih kendang (menang sesuai urutan array), dan titik di luar seluruh kendang — verifikasi: semua test lulus di `./gradlew :kit-core:test`.
+- [x] 4.2 Tulis unit test `HitTesterTest` untuk variasi kasus batas lengkap: model `bass` (5 zona + 4 batas vertikal + tepi busur `C_div`), model `split` (Sedang & Kecil 2: atas `Y < cy`, bawah `Y >= cy`, garis tengah `Y == cy` masuk lower, luar oval), model `single` (dalam, luar), titik di area tumpang tindih kendang (menang sesuai urutan array), dan titik di luar seluruh kendang — verifikasi: semua test lulus di `./gradlew :kit-core:test`.
 - [x] 4.3 Verifikasi di unit test bahwa `findZone()` mengembalikan `null` untuk titik di luar semua kendang, dan urutan evaluasi mengikuti urutan array `drums` di `kit.json` — verifikasi: uji overlap bounding box membuktikan kendang berindeks lebih kecil di array yang menang.
 
 ## 5. Mesin Audio C++ (Oboe)
