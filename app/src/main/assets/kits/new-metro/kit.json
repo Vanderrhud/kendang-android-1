@@ -1,0 +1,52 @@
+{
+  "formatVersion": 1,
+  "kitId": "new-metro",
+  "name": "New Metro",
+  "version": 1,
+  "canvasAspect": 2.0,
+  "drums": [
+    {
+      "id": "bass",
+      "model": "bass",
+      "center": { "x": 0.25, "y": 0.55 },
+      "radius": { "rx": 0.30, "ry": 0.30 },
+      "divider": { "dx": -0.30, "dy": 0.0, "r": 0.80 },
+      "zones": [
+        { "id": "bass-1", "region": "main", "sound": null, "gain": 1.0 },
+        { "id": "bass-2", "region": "crescent", "band": 0, "sound": null, "gain": 1.0 },
+        { "id": "bass-3", "region": "crescent", "band": 1, "sound": null, "gain": 1.0 },
+        { "id": "bass-4", "region": "crescent", "band": 2, "sound": null, "gain": 1.0 },
+        { "id": "bass-5", "region": "crescent", "band": 3, "sound": null, "gain": 1.0 }
+      ]
+    },
+    {
+      "id": "kecil1",
+      "model": "single",
+      "center": { "x": 0.52, "y": 0.35 },
+      "radius": { "rx": 0.17, "ry": 0.17 },
+      "zones": [
+        { "id": "kecil1-1", "region": "full", "sound": null, "gain": 1.0 }
+      ]
+    },
+    {
+      "id": "sedang",
+      "model": "split",
+      "center": { "x": 0.66, "y": 0.60 },
+      "radius": { "rx": 0.20, "ry": 0.20 },
+      "zones": [
+        { "id": "sedang-1", "region": "lower", "sound": null, "gain": 1.0 },
+        { "id": "sedang-2", "region": "upper", "sound": null, "gain": 1.0 }
+      ]
+    },
+    {
+      "id": "kecil2",
+      "model": "split",
+      "center": { "x": 0.82, "y": 0.38 },
+      "radius": { "rx": 0.17, "ry": 0.17 },
+      "zones": [
+        { "id": "kecil2-1", "region": "lower", "sound": null, "gain": 1.0 },
+        { "id": "kecil2-2", "region": "upper", "sound": null, "gain": 1.0 }
+      ]
+    }
+  ]
+}
