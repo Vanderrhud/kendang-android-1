@@ -80,6 +80,9 @@ android {
 
 dependencies {
     implementation(project(":kit-core"))
+    // Dideklarasikan langsung karena :kit-core memakai serialization sebagai `implementation`,
+    // sehingga API kotlinx.serialization tidak tersedia secara transitif di modul ini.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
     implementation("com.google.oboe:oboe:1.9.0")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     testImplementation(kotlin("test"))
