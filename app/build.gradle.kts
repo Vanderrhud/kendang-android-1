@@ -7,7 +7,9 @@ android {
     namespace = "com.vrkendang"
     compileSdk = 34
 
-    ndkVersion = "26.1.10909125"
+    // NDK r27+ diperlukan agar libc++_shared.so arm64 dan library kita kompatibel
+    // dengan perangkat Android 15+ yang memakai page size 16 KB.
+    ndkVersion = "27.3.13750724"
 
     defaultConfig {
         applicationId = "com.vrkendang"
@@ -24,7 +26,12 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments("-DANDROID_STL=c++_shared")
+                // Membuat LOAD segment native 16 KB-aligned. Tanpa ini, dlopen gagal
+                // di perangkat 16 KB dan aplikasi force close saat startup.
+                arguments(
+                    "-DANDROID_STL=c++_shared",
+                    "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+                )
             }
         }
     }
@@ -85,7 +92,8 @@ dependencies {
     // Dideklarasikan langsung karena :kit-core memakai serialization sebagai `implementation`,
     // sehingga API kotlinx.serialization tidak tersedia secara transitif di modul ini.
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
-    implementation("com.google.oboe:oboe:1.9.0")
+    // 1.9.3 adalah rilis pertama Oboe dengan library prebuilt 16 KB-aligned.
+    implementation("com.google.oboe:oboe:1.9.3")
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     testImplementation(kotlin("test"))
     testImplementation(project(":kit-core"))

@@ -21,3 +21,9 @@ target_link_libraries(kendang_audio
     oboe::oboe
     log
 )
+
+# Pastikan LOAD segment library kita sendiri juga 16 KB-aligned. Flag ini aman
+# untuk perangkat 4 KB karena 16 KB adalah kelipatan 4 KB.
+target_link_options(kendang_audio PRIVATE
+    "-Wl,-z,max-page-size=16384"
+)

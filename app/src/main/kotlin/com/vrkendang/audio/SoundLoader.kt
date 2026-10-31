@@ -137,19 +137,38 @@ interface AudioEngineApi {
  * Digunakan sebagai default di produksi.
  */
 internal object AudioEngineApiImpl : AudioEngineApi {
+    private const val TAG = "AudioEngineApi"
+
+    /**
+     * Batas aman di sekitar JNI: kegagalan memuat library native (misalnya
+     * perangkat menolak ELF) tidak boleh menjatuhkan UI. Audio menjadi hening
+     * dan error dicatat, sesuai kontrak "graceful silence, zero crash".
+     */
+    private inline fun <T> safely(default: T, block: () -> T): T = try {
+        block()
+    } catch (t: Throwable) {
+        Log.e(TAG, "Panggilan native audio gagal; audio dinonaktifkan", t)
+        default
+    }
+
     override fun loadSound(
         pcmData: ByteBuffer,
         frameCount: Int,
         sampleRate: Int,
         slotIndex: Int
-    ) = AudioEngine.loadSound(pcmData, frameCount, sampleRate, slotIndex)
+    ) = safely(false) {
+        AudioEngine.loadSound(pcmData, frameCount, sampleRate, slotIndex)
+    }
 
-    override fun releaseAll() = AudioEngine.releaseAll()
+    override fun releaseAll() {
+        safely(Unit) { AudioEngine.releaseAll() }
+    }
 
-    override fun openStream() = AudioEngine.openStream()
+    override fun openStream() = safely(false) { AudioEngine.openStream() }
 
-    override fun startStream() = AudioEngine.startStream()
+    override fun startStream() = safely(false) { AudioEngine.startStream() }
 
-    override fun triggerSound(slotIndex: Int, gain: Float) =
+    override fun triggerSound(slotIndex: Int, gain: Float) = safely(false) {
         AudioEngine.triggerSound(slotIndex, gain)
+    }
 }

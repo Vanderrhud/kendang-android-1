@@ -5,6 +5,7 @@ import android.app.AlertDialog
 import android.content.pm.ActivityInfo
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
@@ -32,6 +33,10 @@ import java.io.File
  * - Siklus hidup audio: pauseStream pada onStop, resumeStream pada onStart, closeStream pada onDestroy (Task 5.8).
  */
 class MainActivity : Activity() {
+
+    private companion object {
+        private const val TAG = "MainActivity"
+    }
 
     private lateinit var headerView: HeaderView
     private lateinit var boardView: KendangBoardView
@@ -101,19 +106,23 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
-        // Resume audio stream saat kembali ke foreground (Task 5.8)
-        AudioEngine.resumeStream()
+        // Resume audio stream saat kembali ke foreground (Task 5.8).
+        // Kegagalan native tidak boleh menjatuhkan UI; audio cukup hening.
+        runCatching { AudioEngine.resumeStream() }
+            .onFailure { Log.e(TAG, "Gagal resume stream audio", it) }
     }
 
     override fun onStop() {
         super.onStop()
         // Hentikan seluruh voice aktif saat masuk background agar tidak ada suara menggantung (Task 5.8)
-        AudioEngine.pauseStream()
+        runCatching { AudioEngine.pauseStream() }
+            .onFailure { Log.e(TAG, "Gagal pause stream audio", it) }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        AudioEngine.closeStream()
+        runCatching { AudioEngine.closeStream() }
+            .onFailure { Log.e(TAG, "Gagal menutup stream audio", it) }
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
