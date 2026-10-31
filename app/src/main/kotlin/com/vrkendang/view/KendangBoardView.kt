@@ -288,10 +288,10 @@ class KendangBoardView @JvmOverloads constructor(
 
         // Area kanvas aktif (memudahkan orientasi visual di mode edit/kalibrasi)
         val canvasRect = RectF(
-            mapper.offsetX,
-            mapper.offsetY,
-            mapper.offsetX + mapper.canvasWidth,
-            mapper.offsetY + mapper.canvasHeight
+            mapper.canvasLeft,
+            mapper.canvasTop,
+            mapper.canvasRight,
+            mapper.canvasBottom
         )
         canvas.drawRect(canvasRect, canvasAreaPaint)
         if (mode == BoardMode.EDIT_LAYOUT || showZoneGuides) {
