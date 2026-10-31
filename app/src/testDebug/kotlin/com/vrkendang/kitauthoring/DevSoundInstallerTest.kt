@@ -209,7 +209,7 @@ class DevSoundInstallerTest {
 
             // Pasang WAV dulu
             val validWav = buildValidWav()
-            installer.installWav("bass-1", ByteArrayInputStream(validWav), tempDir, 0)
+            installer.installWav("bass-1", ByteArrayInputStream(validWav), tempDir, 0, FakeAudioEngine())
 
             // Kosongkan suara
             val clearResult = installer.clearSound("bass-1", tempDir)

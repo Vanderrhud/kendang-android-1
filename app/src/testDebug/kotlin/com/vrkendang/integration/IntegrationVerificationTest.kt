@@ -146,11 +146,11 @@ class IntegrationVerificationTest {
                 "bass-3" to 2,
                 "bass-4" to 3,
                 "bass-5" to 4,
-                "dut" to 5,
-                "tak-1" to 6,
-                "tak-2" to 7,
-                "tung" to 8,
-                "tong" to 9
+                "kecil1-1" to 5,
+                "sedang-1" to 6,
+                "sedang-2" to 7,
+                "kecil2-1" to 8,
+                "kecil2-2" to 9
             )
 
             for ((zoneId, slot) in zoneSlotMap) {
@@ -184,7 +184,7 @@ class IntegrationVerificationTest {
         val fakeAudio = RecordingAudioEngine()
 
         // Simulasi 5 sentuhan serempak pada pointer berbeda (misal pointer 0 s.d. 4)
-        val pointerSlots = listOf(0, 1, 5, 6, 8) // bass-1, bass-2, dut, tak-1, tung
+        val pointerSlots = listOf(0, 1, 5, 6, 8) // bass-1, bass-2, kecil1-1, sedang-1, kecil2-1
 
         for (slot in pointerSlots) {
             fakeAudio.triggerSound(slot, 1.0f)
@@ -223,12 +223,12 @@ class IntegrationVerificationTest {
             val session = DevKitAuthoringSession(tempDir)
             val newKit = session.createNewKit("kendang-unassigned", "Kendang Null", null)
 
-            // Hit test pada zona dut
-            val ketipung = newKit.drums.first { it.id == "ketipung" }
-            val hit = HitTester.findHit(newKit, ketipung.center.x, ketipung.center.y)
+            // Hit test pada zona Kecil 1 yang belum diberi suara
+            val kecil1 = newKit.drums.first { it.id == "kecil1" }
+            val hit = HitTester.findHit(newKit, kecil1.center.x, kecil1.center.y)
 
             assertNotNull(hit)
-            assertEquals("dut", hit.zone.id)
+            assertEquals("kecil1-1", hit.zone.id)
             assertNull(hit.zone.sound) // zona unassigned
 
             // Simulasi logika KendangBoardView: jika sound == null, tidak memicu triggerSound
@@ -262,11 +262,11 @@ class IntegrationVerificationTest {
                 "bass-3" to 2,
                 "bass-4" to 3,
                 "bass-5" to 4,
-                "dut" to 5,
-                "tak-1" to 6,
-                "tak-2" to 7,
-                "tung" to 8,
-                "tong" to 9
+                "kecil1-1" to 5,
+                "sedang-1" to 6,
+                "sedang-2" to 7,
+                "kecil2-1" to 8,
+                "kecil2-2" to 9
             )
             for ((zoneId, slot) in zoneSlotMap) {
                 val wav = createPcmWavBytes()
