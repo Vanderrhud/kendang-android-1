@@ -3,6 +3,7 @@ package com.vrkendang
 import android.app.Activity
 import android.app.AlertDialog
 import android.content.pm.ActivityInfo
+import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -10,9 +11,10 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.WindowInsetsController
 import android.view.WindowManager
+import android.widget.ScrollView
+import android.widget.TextView
 import com.vrkendang.audio.AudioEngine
 import com.vrkendang.audio.KitAudioLoader
-import com.vrkendang.dev.DevBridgeProvider
 import com.vrkendang.repository.AssetManagerKitAssetSource
 import com.vrkendang.repository.FileLayoutOverrideSource
 import com.vrkendang.repository.KitRepository
@@ -47,42 +49,68 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. Kunci layar agar selalu menyala selama aplikasi di foreground (Task 7.4)
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        try {
+            // 1. Kunci layar agar selalu menyala selama aplikasi di foreground (Task 7.4)
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-        // 2. Kunci orientasi landscape (Task 7.4)
-        @Suppress("SourceLockedOrientationActivity")
-        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            // 2. Kunci orientasi landscape secara aman (sudah dideklarasikan juga di AndroidManifest.xml) (Task 7.4)
+            runCatching {
+                @Suppress("SourceLockedOrientationActivity")
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
+            }.onFailure { Log.w(TAG, "Gagal mengunci orientasi secara programatik", it) }
 
-        // 3. Terapkan mode Immersive Sticky (Task 7.4)
-        applyImmersiveStickyMode()
+            // 3. Muat layout utama ConstraintLayout terlebih dahulu sebelum mengakses DecorView/InsetsController (Task 9.1 & 10.1)
+            setContentView(R.layout.activity_main)
 
-        // 4. Inisialisasi repositori kit
-        val assetSource = AssetManagerKitAssetSource(assets)
-        val layoutsDir = File(filesDir, "layouts")
-        val overrideSource = FileLayoutOverrideSource(layoutsDir)
-        kitRepository = KitRepository(assetSource, overrideSource)
+            // 4. Terapkan mode Immersive Sticky setelah content view siap (Task 7.4)
+            applyImmersiveStickyMode()
 
-        // 5. Muat layout utama ConstraintLayout (Task 9.1 & 10.1)
-        setContentView(R.layout.activity_main)
-        headerView = findViewById(R.id.header_view)
-        boardView = findViewById(R.id.board_view)
-        calibrationOverlay = findViewById(R.id.calibration_overlay)
+            // 5. Inisialisasi repositori kit
+            val assetSource = AssetManagerKitAssetSource(assets)
+            val layoutsDir = File(filesDir, "layouts")
+            val overrideSource = FileLayoutOverrideSource(layoutsDir)
+            kitRepository = KitRepository(assetSource, overrideSource)
 
-        headerView.boardView = boardView
-        calibrationOverlay.boardView = boardView
-        calibrationOverlay.headerView = headerView
+            headerView = findViewById(R.id.header_view)
+            boardView = findViewById(R.id.board_view)
+            calibrationOverlay = findViewById(R.id.calibration_overlay)
 
-        // 6. Hubungkan tombol Kit Selector ke dialog daftar kit (Task 9.2)
-        headerView.onKitSelectorClicked = {
-            showKitSelectorDialog()
+            headerView.boardView = boardView
+            calibrationOverlay.boardView = boardView
+            calibrationOverlay.headerView = headerView
+
+            // 6. Hubungkan tombol Kit Selector ke dialog daftar kit (Task 9.2)
+            headerView.onKitSelectorClicked = {
+                showKitSelectorDialog()
+            }
+
+            // 7. Muat dan aktifkan kit awal bawaan (Mode Developer dibuka hanya saat dipilih dari menu Pengaturan ⚙)
+            loadDefaultKit()
+        } catch (t: Throwable) {
+            Log.e(TAG, "Gagal melakukan inisialisasi MainActivity", t)
+            showDiagnosticErrorScreen(t)
         }
+    }
 
-        // 7. Muat dan aktifkan kit awal bawaan
-        loadDefaultKit()
-
-        // 8. Pasang fitur developer jika pada build debug (Task 8.1 & CI check 2.4)
-        DevBridgeProvider.get().attach(this, boardView)
+    /**
+     * Menampilkan layar diagnostik stacktrace apabila terjadi error tak terduga saat inisialisasi,
+     * sehingga aplikasi tidak langsung tertutup (force close) tanpa informasi di perangkat fisik.
+     */
+    private fun showDiagnosticErrorScreen(error: Throwable) {
+        runCatching {
+            val errorText = TextView(this).apply {
+                text = "Gagal memuat VR Kendang:\n\n${error.stackTraceToString()}"
+                textSize = 12f
+                setTextColor(Color.WHITE)
+                setPadding(32, 32, 32, 32)
+                setTextIsSelectable(true)
+            }
+            val scrollView = ScrollView(this).apply {
+                setBackgroundColor(Color.parseColor("#181614"))
+                addView(errorText)
+            }
+            setContentView(scrollView)
+        }
     }
 
     /**
@@ -97,7 +125,7 @@ class MainActivity : Activity() {
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
         // Jika mode kalibrasi aktif, tangani konfirmasi keluar / simpan perubahan (Task 10.4)
-        if (calibrationOverlay.handleBackPressed()) {
+        if (::calibrationOverlay.isInitialized && calibrationOverlay.handleBackPressed()) {
             return
         }
         @Suppress("DEPRECATION")
@@ -137,23 +165,27 @@ class MainActivity : Activity() {
      * Mengonfigurasi Immersive Sticky Mode (Task 7.4).
      */
     private fun applyImmersiveStickyMode() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            window.setDecorFitsSystemWindows(false)
-            window.insetsController?.let { controller ->
-                controller.hide(WindowInsets.Type.systemBars())
-                controller.systemBarsBehavior =
-                    WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                window.setDecorFitsSystemWindows(false)
+                window.insetsController?.let { controller ->
+                    controller.hide(WindowInsets.Type.systemBars())
+                    controller.systemBarsBehavior =
+                        WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                }
+            } else {
+                @Suppress("DEPRECATION")
+                window.decorView.systemUiVisibility = (
+                    View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                        or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                        or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                        or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                        or View.SYSTEM_UI_FLAG_FULLSCREEN
+                )
             }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    or View.SYSTEM_UI_FLAG_LAYOUT_STABLE
-                    or View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    or View.SYSTEM_UI_FLAG_FULLSCREEN
-            )
+        }.onFailure {
+            Log.w(TAG, "Gagal menerapkan Immersive Sticky Mode", it)
         }
     }
 

@@ -53,22 +53,33 @@ class DevKitAuthoringBridge : DevBridge {
     private var activeSlotMap = mutableMapOf<String, Int>()
 
     override fun attach(activity: Activity, boardView: KendangBoardView) {
-        val devKitDir = File(activity.filesDir, "dev-kit")
-        session = DevKitAuthoringSession(devKitDir)
+        try {
+            val devKitDir = File(activity.filesDir, "dev-kit")
+            if (!::session.isInitialized) {
+                session = DevKitAuthoringSession(devKitDir)
+            }
 
-        // Muat atau inisialisasi salinan kerja
-        var kit = session.loadExistingWorkingCopy()
-        if (kit == null) {
-            try {
-                kit = session.openBuiltInKit("new-metro", activity.assets)
-            } catch (_: Exception) {}
+            // Muat atau inisialisasi salinan kerja bila belum aktif di sesi ini
+            var kit = session.workingKit ?: session.loadExistingWorkingCopy()
+            if (kit == null) {
+                try {
+                    kit = session.openBuiltInKit("new-metro", activity.assets)
+                } catch (_: Throwable) {}
+            }
+
+            if (kit != null) {
+                applyKitToBoard(kit, boardView, devKitDir)
+            }
+
+            addFloatingDevButton(activity, boardView)
+            showFullDevAuthoringDialog(activity, boardView)
+        } catch (t: Throwable) {
+            AlertDialog.Builder(activity)
+                .setTitle("Gagal Membuka Mode Developer")
+                .setMessage(t.stackTraceToString())
+                .setPositiveButton("OK", null)
+                .show()
         }
-
-        if (kit != null) {
-            applyKitToBoard(kit, boardView, devKitDir)
-        }
-
-        addFloatingDevButton(activity, boardView)
     }
 
     private fun addFloatingDevButton(activity: Activity, boardView: KendangBoardView) {
@@ -93,13 +104,14 @@ class DevKitAuthoringBridge : DevBridge {
             }
         }
 
+        // Tempatkan di kanan bawah agar tidak menutupi tombol Pengaturan (⚙) pada HeaderView di kanan atas
         val layoutParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             FrameLayout.LayoutParams.WRAP_CONTENT
         ).apply {
-            gravity = Gravity.TOP or Gravity.END
-            topMargin = 16
-            rightMargin = 16
+            gravity = Gravity.BOTTOM or Gravity.END
+            bottomMargin = 24
+            rightMargin = 24
         }
 
         decorView.addView(button, layoutParams)

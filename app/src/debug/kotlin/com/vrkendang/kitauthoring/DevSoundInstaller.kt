@@ -7,7 +7,6 @@ import com.vrkendang.kitcore.audio.WavParser
 import com.vrkendang.kitcore.model.KitData
 import com.vrkendang.kitcore.packageio.KitPackageReader
 import com.vrkendang.kitcore.parser.KitJsonParser
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -116,7 +115,7 @@ class DevSoundInstaller(
         val updatedKit = currentKit.copy(drums = updatedDrums)
 
         try {
-            val jsonString = json.encodeToString(updatedKit)
+            val jsonString = json.encodeToString(KitData.serializer(), updatedKit)
             // Tulis atomik via file sementara
             val tmpFile = File(devKitDir, "kit.json.tmp")
             tmpFile.writeText(jsonString)
@@ -124,7 +123,7 @@ class DevSoundInstaller(
                 kitJsonFile.writeText(jsonString)
                 tmpFile.delete()
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             return Result.Failure("Gagal memperbarui kit.json: ${e.message}")
         }
 
@@ -176,14 +175,14 @@ class DevSoundInstaller(
         val updatedKit = currentKit.copy(drums = updatedDrums)
 
         try {
-            val jsonString = json.encodeToString(updatedKit)
+            val jsonString = json.encodeToString(KitData.serializer(), updatedKit)
             val tmpFile = File(devKitDir, "kit.json.tmp")
             tmpFile.writeText(jsonString)
             if (!tmpFile.renameTo(kitJsonFile)) {
                 kitJsonFile.writeText(jsonString)
                 tmpFile.delete()
             }
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
             return Result.Failure("Gagal memperbarui kit.json: ${e.message}")
         }
 

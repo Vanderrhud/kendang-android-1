@@ -22,9 +22,14 @@
 #define LOG_TAG "KendangAudio"
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
 
-// Singleton mesin audio; dibuat sekali di JNI_OnLoad dan dihapus di JNI_OnUnload.
-// Diakses hanya dari thread Kotlin (UI/Coroutine) — tidak dari audio callback.
-static AudioEngine* gEngine = nullptr;
+// Singleton mesin audio statis seumur proses.
+// Menggunakan function-local static agar bebas alokasi heap di JNI_OnLoad dan selalu terinisialisasi aman.
+static AudioEngine& getEngine() {
+    static AudioEngine instance;
+    return instance;
+}
+
+static AudioEngine* gEngine = &getEngine();
 
 // ---------------------------------------------------------------------------
 // Lifecycle library
@@ -32,20 +37,20 @@ static AudioEngine* gEngine = nullptr;
 
 /**
  * Dipanggil Android runtime saat libkendang_audio.so pertama kali dimuat.
- * Membuat singleton AudioEngine di heap C++ agar lifetime-nya sama dengan proses.
  */
 extern "C" JNIEXPORT jint JNI_OnLoad(JavaVM* /*vm*/, void* /*reserved*/) {
-    gEngine = new AudioEngine();
+    gEngine = &getEngine();
     return JNI_VERSION_1_6;
 }
 
 /**
- * Dipanggil Android runtime saat library di-unload (jarang terjadi di Android,
- * tetapi kita pastikan tidak ada resource leak).
+ * Dipanggil Android runtime saat library di-unload.
  */
 extern "C" JNIEXPORT void JNI_OnUnload(JavaVM* /*vm*/, void* /*reserved*/) {
-    delete gEngine;
-    gEngine = nullptr;
+    if (gEngine != nullptr) {
+        gEngine->close();
+        gEngine = nullptr;
+    }
 }
 
 // ---------------------------------------------------------------------------

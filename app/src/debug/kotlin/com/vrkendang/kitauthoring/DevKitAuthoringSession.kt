@@ -15,7 +15,6 @@ import com.vrkendang.kitcore.packageio.KitPackageReader
 import com.vrkendang.kitcore.packageio.KitPackageWriter
 import com.vrkendang.kitcore.parser.KitJsonParser
 import com.vrkendang.kitcore.validation.KitValidator
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -365,7 +364,7 @@ class DevKitAuthoringSession(
     private fun writeKitJsonToDisk(kit: KitData) {
         val targetFile = File(devKitDir, "kit.json")
         val tmpFile = File(devKitDir, "kit.json.tmp")
-        val jsonText = json.encodeToString(kit)
+        val jsonText = json.encodeToString(KitData.serializer(), kit)
         tmpFile.writeText(jsonText)
         if (!tmpFile.renameTo(targetFile)) {
             targetFile.writeText(jsonText)

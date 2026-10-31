@@ -2,6 +2,7 @@
 #include <android/log.h>
 #include <cstring>
 #include <cmath>
+#include <thread>
 
 #define LOG_TAG "VRKendangAudio"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
@@ -23,9 +24,16 @@ AudioEngine::~AudioEngine() {
 }
 
 oboe::Result AudioEngine::openStreamInternal() {
+    mIsClosing.store(false, std::memory_order_release);
+
     if (mStream) {
-        LOGI("Oboe stream sudah terbuka, mengabaikan permintaan openStream");
-        return oboe::Result::OK;
+        const oboe::StreamState state = mStream->getState();
+        if (state != oboe::StreamState::Closed &&
+            state != oboe::StreamState::Disconnected) {
+            LOGI("Oboe stream sudah terbuka, mengabaikan permintaan openStream");
+            return oboe::Result::OK;
+        }
+        mStream.reset();
     }
 
     oboe::AudioStreamBuilder builder;
@@ -107,7 +115,10 @@ bool AudioEngine::openStream() {
 
 bool AudioEngine::start() {
     std::lock_guard<std::mutex> lock(mEngineMutex);
-    if (!mStream) {
+    if (!mStream ||
+        mStream->getState() == oboe::StreamState::Closed ||
+        mStream->getState() == oboe::StreamState::Disconnected) {
+        mStream.reset();
         oboe::Result result = openStreamInternal();
         if (result != oboe::Result::OK) {
             return false;
@@ -115,6 +126,13 @@ bool AudioEngine::start() {
     }
 
     if (mStream) {
+        const oboe::StreamState state = mStream->getState();
+        // Hindari memanggil requestStart() berulang kali bila stream sedang Starting/Started
+        // (misal saat onCreate() diikuti langsung oleh onStart()).
+        if (state == oboe::StreamState::Started || state == oboe::StreamState::Starting) {
+            return true;
+        }
+
         oboe::Result result = mStream->requestStart();
         if (result != oboe::Result::OK) {
             LOGE("Gagal memulai Oboe stream: %s", oboe::convertToText(result));
@@ -129,11 +147,14 @@ bool AudioEngine::start() {
 void AudioEngine::stop() {
     std::lock_guard<std::mutex> lock(mEngineMutex);
     if (mStream) {
-        oboe::Result result = mStream->requestStop();
-        if (result != oboe::Result::OK) {
-            LOGW("Peringatan saat requestStop Oboe stream: %s", oboe::convertToText(result));
-        } else {
-            LOGI("Oboe stream dihentikan sementara (stopped)");
+        const oboe::StreamState state = mStream->getState();
+        if (state == oboe::StreamState::Started || state == oboe::StreamState::Starting) {
+            oboe::Result result = mStream->requestStop();
+            if (result != oboe::Result::OK) {
+                LOGW("Peringatan saat requestStop Oboe stream: %s", oboe::convertToText(result));
+            } else {
+                LOGI("Oboe stream dihentikan sementara (stopped)");
+            }
         }
     }
     // Hentikan seluruh voice aktif agar tidak ada bunyi menggantung saat resume (Desain D3)
@@ -142,6 +163,7 @@ void AudioEngine::stop() {
 
 void AudioEngine::close() {
     std::lock_guard<std::mutex> lock(mEngineMutex);
+    mIsClosing.store(true, std::memory_order_release);
     if (mStream) {
         mStream->stop();
         mStream->close();
@@ -246,6 +268,13 @@ bool AudioEngine::loadSound(
 
     auto& slot = mSoundSlots[static_cast<size_t>(slotIndex)];
 
+    // Nonaktifkan voice yang sedang merujuk pada slot ini sebelum buffer di-realokasi
+    for (size_t i = 0; i < kMaxVoices; ++i) {
+        if (mVoicePool[i].slotIndex == slotIndex) {
+            mVoicePool[i].reset();
+        }
+    }
+
     // Salin PCM 16-bit asli ke memori C++ (C++ memegang kepemilikan penuh)
     slot.originalPcm.assign(pcmData, pcmData + frameCount);
     slot.originalFrameCount = frameCount;
@@ -276,6 +305,14 @@ void AudioEngine::unloadSound(int32_t slotIndex) {
 
 void AudioEngine::releaseAllSounds() {
     std::lock_guard<std::mutex> lock(mEngineMutex);
+    // Hentikan stream terlebih dahulu jika sedang aktif agar callback audio real-time
+    // tidak membaca buffer mSoundSlots saat memori PCM sedang dibebaskan.
+    if (mStream) {
+        const oboe::StreamState state = mStream->getState();
+        if (state == oboe::StreamState::Started || state == oboe::StreamState::Starting) {
+            mStream->stop();
+        }
+    }
     resetVoicePoolInternal();
     for (size_t i = 0; i < kMaxSoundSlots; ++i) {
         mSoundSlots[i].reset();
@@ -493,48 +530,34 @@ void AudioEngine::onErrorBeforeClose(
 void AudioEngine::onErrorAfterClose(
     oboe::AudioStream * /* audioStream */,
     oboe::Result error) {
-    LOGI("Oboe onErrorAfterClose: %s — memulai reconnect otomatis", oboe::convertToText(error));
+    LOGI("Oboe onErrorAfterClose: %s — menjadwalkan reconnect otomatis", oboe::convertToText(error));
 
-    // Reconnect otomatis diperlukan saat routing audio berubah, misalnya:
-    //   - Headphone dicolokkan → Android memindahkan output ke headphone jack/BT.
-    //   - Headphone dicabut → Android mengembalikan output ke speaker internal.
-    //   - Bluetooth audio device connect/disconnect.
-    //
-    // Alasan: Oboe menutup stream lama dan memanggil callback ini dari thread internalnya.
-    // Karena onErrorAfterClose berjalan di luar audio callback (boleh mutex),
-    // kita dapat langsung membuka ulang stream dengan openStreamInternal() yang
-    // secara otomatis membaca native sample rate baru dan memanggil resampleAllSlots()
-    // sehingga pitch tetap benar meskipun rate hardware berubah (misal speaker 48000 →
-    // headphone DAC 44100 atau sebaliknya).
-    //
-    // Reconnect tidak dilakukan jika bukan error routing (misal error karena close() dipanggil
-    // eksplisit dari Kotlin); namun Oboe tidak memanggil callback ini saat close() eksplisit,
-    // sehingga heuristik ini cukup aman.
+    // PENTING (Pencegahan Self-Destruction / SIGABRT di Thread Oboe):
+    // onErrorAfterClose dipanggil oleh Oboe dari dalam thread error internal milik objek AudioStream.
+    // Memanggil mStream.reset() secara sinkron di dalam fungsi ini akan menghancurkan objek AudioStream
+    // saat fungsi anggotanya sendiri masih berada di call stack (memicu self-join std::system_error
+    // atau use-after-free). Oleh karena itu, pembukaan ulang stream harus dijalankan pada thread terpisah.
+    std::thread([this]() {
+        std::lock_guard<std::mutex> lock(mEngineMutex);
+        if (mIsClosing.load(std::memory_order_acquire)) {
+            return;
+        }
 
-    std::lock_guard<std::mutex> lock(mEngineMutex);
+        mStream.reset();
 
-    // Lepas pointer stream lama yang sudah ditutup Oboe agar openStreamInternal()
-    // memulai fresh tanpa menyentuh stream yang sudah invalid.
-    mStream.reset();
+        oboe::Result openResult = openStreamInternal();
+        if (openResult != oboe::Result::OK) {
+            LOGE("Reconnect gagal membuka stream baru: %s", oboe::convertToText(openResult));
+            return;
+        }
 
-    oboe::Result openResult = openStreamInternal();
-    if (openResult != oboe::Result::OK) {
-        LOGE("Reconnect gagal membuka stream baru: %s", oboe::convertToText(openResult));
-        // Tidak ada crash — engine tetap valid, aplikasi hanya tidak bisa berbunyi.
-        // Kotlin/UI dapat memanggil openStream() + startStream() kembali saat user
-        // mencolokkan perangkat audio atau melalui error callback di lapisan atas.
-        return;
-    }
-
-    oboe::Result startResult = mStream->requestStart();
-    if (startResult != oboe::Result::OK) {
-        LOGE("Reconnect gagal memulai stream baru: %s", oboe::convertToText(startResult));
-        // Stream terbuka tapi tidak bisa dimulai; biarkan Kotlin retry jika perlu.
-        return;
-    }
-
-    // resampleAllSlots() sudah dipanggil di dalam openStreamInternal() saat mSampleRate dibaca.
-    // Jika sample rate berubah (misal 48000 → 44100), seluruh slot PCM sudah di-resample ulang
-    // ke rate baru sebelum requestStart() dipanggil, sehingga pitch langsung benar.
-    LOGI("Reconnect berhasil: stream baru aktif pada sampleRate=%d Hz", mSampleRate);
+        if (mStream) {
+            oboe::Result startResult = mStream->requestStart();
+            if (startResult != oboe::Result::OK) {
+                LOGE("Reconnect gagal memulai stream baru: %s", oboe::convertToText(startResult));
+                return;
+            }
+            LOGI("Reconnect berhasil: stream baru aktif pada sampleRate=%d Hz", mSampleRate);
+        }
+    }).detach();
 }

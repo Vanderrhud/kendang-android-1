@@ -6,5 +6,7 @@ import com.vrkendang.kitauthoring.DevKitAuthoringBridge
  * Penyedia DevBridge untuk build debug.
  */
 object DevBridgeProvider {
-    fun get(): DevBridge = DevKitAuthoringBridge()
+    private val instance = DevKitAuthoringBridge()
+
+    fun get(): DevBridge = instance
 }

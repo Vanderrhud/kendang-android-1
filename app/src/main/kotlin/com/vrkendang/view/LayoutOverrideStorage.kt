@@ -1,7 +1,6 @@
 package com.vrkendang.view
 
 import com.vrkendang.kitcore.model.LayoutOverride
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import java.io.File
 
@@ -33,7 +32,7 @@ class LayoutOverrideStorage(
             val targetFile = File(layoutsDir, "${override.kitId}.json")
             val tmpFile = File(layoutsDir, "${override.kitId}.json.tmp")
 
-            val jsonString = json.encodeToString(override)
+            val jsonString = json.encodeToString(LayoutOverride.serializer(), override)
             tmpFile.writeText(jsonString)
 
             if (!tmpFile.renameTo(targetFile)) {
@@ -42,7 +41,7 @@ class LayoutOverrideStorage(
                 tmpFile.delete()
             }
             true
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             // Kegagalan penulisan (misal memori penuh): tidak merusak file lama, return false
             false
         }
@@ -56,11 +55,11 @@ class LayoutOverrideStorage(
         return try {
             val file = File(layoutsDir, "$kitId.json")
             if (file.isFile) {
-                json.decodeFromString<LayoutOverride>(file.readText())
+                json.decodeFromString(LayoutOverride.serializer(), file.readText())
             } else {
                 null
             }
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
             null
         }
     }

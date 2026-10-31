@@ -83,8 +83,8 @@ public:
 
 private:
     std::array<T, Capacity> mBuffer;
-    alignas(64) std::atomic<size_t> mHead{0};
-    alignas(64) std::atomic<size_t> mTail{0};
+    std::atomic<size_t> mHead{0};
+    std::atomic<size_t> mTail{0};
 };
 
 #endif // VR_KENDANG_LOCK_FREE_QUEUE_H

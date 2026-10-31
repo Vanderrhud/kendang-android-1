@@ -2,6 +2,7 @@
 #define VR_KENDANG_AUDIO_ENGINE_H
 
 #include <oboe/Oboe.h>
+#include <atomic>
 #include <memory>
 #include <mutex>
 #include <array>
@@ -195,6 +196,7 @@ private:
     mutable std::mutex mEngineMutex;
 
     std::shared_ptr<oboe::AudioStream> mStream;
+    std::atomic<bool> mIsClosing{false};
     int32_t mSampleRate{0};
     int32_t mChannelCount{2};
 
