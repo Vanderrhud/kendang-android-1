@@ -1,16 +1,19 @@
 package com.vrkendang.view
 
-import android.content.ContextWrapper
 import android.view.View
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
+@RunWith(RobolectricTestRunner::class)
 class HeaderViewTest {
 
     @Test
     fun testAdSlotIsHiddenInMvp() {
-        val context = object : ContextWrapper(null) {}
+        val context = RuntimeEnvironment.getApplication()
         val headerView = HeaderView(context)
 
         // Sesuai Task 9.1: slot iklan tengah tersembunyi pada MVP
@@ -19,7 +22,7 @@ class HeaderViewTest {
 
     @Test
     fun testSetActiveKitNameUpdatesSelectorButtonText() {
-        val context = object : ContextWrapper(null) {}
+        val context = RuntimeEnvironment.getApplication()
         val headerView = HeaderView(context)
 
         headerView.setActiveKitName("Koplo Mantap")
@@ -28,7 +31,7 @@ class HeaderViewTest {
 
     @Test
     fun testKitSelectorButtonClickTriggersListener() {
-        val context = object : ContextWrapper(null) {}
+        val context = RuntimeEnvironment.getApplication()
         val headerView = HeaderView(context)
 
         var clicked = false

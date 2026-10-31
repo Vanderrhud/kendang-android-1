@@ -114,7 +114,7 @@ class IntegrationVerificationTest {
             // Ketuk Bass-1 melalui simulasi koordinat hit testing
             val kit = session.workingKit!!
             val bassDrum = kit.drums.first { it.id == "bass" }
-            val hitResult = HitTester.findHit(bassDrum.center.x, bassDrum.center.y, kit)
+            val hitResult = HitTester.findHit(kit, bassDrum.center.x, bassDrum.center.y)
 
             assertNotNull(hitResult)
             assertEquals("bass-1", hitResult.zone.id)
@@ -225,7 +225,7 @@ class IntegrationVerificationTest {
 
             // Hit test pada zona dut
             val ketipung = newKit.drums.first { it.id == "ketipung" }
-            val hit = HitTester.findHit(ketipung.center.x, ketipung.center.y, newKit)
+            val hit = HitTester.findHit(newKit, ketipung.center.x, ketipung.center.y)
 
             assertNotNull(hit)
             assertEquals("dut", hit.zone.id)

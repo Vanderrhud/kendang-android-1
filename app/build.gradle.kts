@@ -53,6 +53,8 @@ android {
         // Memungkinkan unit test JVM memanggil android.util.Log tanpa crash.
         // Log call di SoundLoader cukup di-stub (tidak diverifikasi di test).
         unitTests.isReturnDefaultValues = true
+        // Diperlukan Robolectric agar test View dapat memuat resource dan manifest Android.
+        unitTests.isIncludeAndroidResources = true
     }
 
     signingConfigs {
@@ -87,4 +89,5 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
     testImplementation(kotlin("test"))
     testImplementation(project(":kit-core"))
+    testImplementation("org.robolectric:robolectric:4.12.2")
 }

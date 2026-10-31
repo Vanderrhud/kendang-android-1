@@ -1,6 +1,5 @@
 package com.vrkendang.view
 
-import android.content.ContextWrapper
 import android.view.View
 import com.vrkendang.kitcore.model.KitData
 import com.vrkendang.kitcore.parser.KitJsonParser
@@ -9,7 +8,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 
+@RunWith(RobolectricTestRunner::class)
 class CalibrationOverlayViewTest {
 
     private fun loadNewMetroKit(): KitData {
@@ -24,7 +27,7 @@ class CalibrationOverlayViewTest {
 
     @Test
     fun testStartCalibrationDisablesKitSelectorAndEntersEditMode() {
-        val context = object : ContextWrapper(null) {}
+        val context = RuntimeEnvironment.getApplication()
         val headerView = HeaderView(context)
         val boardView = KendangBoardView(context)
         val overlay = CalibrationOverlayView(context)
@@ -46,7 +49,7 @@ class CalibrationOverlayViewTest {
 
     @Test
     fun testSaveLayoutOverrideClosesCalibrationAndReEnablesKitSelector() {
-        val context = object : ContextWrapper(null) {}
+        val context = RuntimeEnvironment.getApplication()
         val headerView = HeaderView(context)
         val boardView = KendangBoardView(context)
         val overlay = CalibrationOverlayView(context)
@@ -70,7 +73,7 @@ class CalibrationOverlayViewTest {
 
     @Test
     fun testCancelClosesCalibrationAndRevertsBoardMode() {
-        val context = object : ContextWrapper(null) {}
+        val context = RuntimeEnvironment.getApplication()
         val headerView = HeaderView(context)
         val boardView = KendangBoardView(context)
         val overlay = CalibrationOverlayView(context)
