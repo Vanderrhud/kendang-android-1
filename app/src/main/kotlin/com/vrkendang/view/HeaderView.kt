@@ -11,7 +11,6 @@ import android.view.View
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.TextView
 
 /**
  * Header tampilan atas untuk pemain (Tahap 9).
@@ -20,9 +19,9 @@ import android.widget.TextView
  * - Tinggi tetap 48dp, pinned di bagian atas layar.
  * - Sisi kiri (start): tombol Kit Selector menampilkan nama kit aktif dan membuka dialog daftar kit (Task 9.2).
  * - Sisi tengah (center): kontainer slot iklan yang tersembunyi (GONE) pada MVP (Task 9.1).
- * - Sisi kanan (end): tombol Pengaturan (⚙) membuka menu:
- *   - "Edit Tata Letak" (semua build)
- *   - "Mode Developer" (khusus build debug) (Task 9.3).
+ * - Sisi kanan (end): tombol navigasi langsung ke halaman khusus:
+ *   - "📐 Tata Letak" -> membuka halaman penuh CalibrationActivity
+ *   - "🛠 Mode Developer" (khusus build debug) -> membuka halaman penuh DevAuthoringActivity
  */
 class HeaderView @JvmOverloads constructor(
     context: Context,
@@ -36,40 +35,36 @@ class HeaderView @JvmOverloads constructor(
     /** Slot iklan di tengah (tersembunyi/GONE pada MVP). */
     val adSlotContainer: FrameLayout
 
-    /** Tombol pengaturan di sisi kanan. */
+    /** Tombol pengaturan / tata letak di sisi kanan. */
     val settingsButton: Button
 
     /** Callback ketika tombol pemilih kit ditekan. */
     var onKitSelectorClicked: (() -> Unit)? = null
 
-    /** Callback ketika tombol pengaturan ditekan (opsional, default membuka dialog menu pengaturan). */
+    /** Callback ketika tombol pengaturan ditekan (opsional). */
     var onSettingsClicked: (() -> Unit)? = null
 
     /** Referensi ke board view untuk tindakan pengaturan seperti edit tata letak. */
     var boardView: KendangBoardView? = null
 
-    private val buttonBg = GradientDrawable().apply {
-        setColor(Color.parseColor("#2A2622"))
-        cornerRadius = 12f
-        setStroke(2, Color.parseColor("#443D36"))
-    }
-
     init {
-        // Latar belakang header gelap elegan dengan pembatas bawah
         setBackgroundColor(Color.parseColor("#181614"))
 
         val density = resources.displayMetrics.density
         val padHorizontal = (12 * density).toInt()
-        val padVertical = (6 * density).toInt()
 
         // 1. Tombol Kit Selector (Kiri / Start)
         kitSelectorButton = Button(context).apply {
             text = "🥁 New Metro ▼"
-            textSize = 13f
+            textSize = 12f
             setTextColor(Color.WHITE)
-            background = buttonBg.constantState?.newDrawable() ?: buttonBg
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#2A2622"))
+                cornerRadius = 10f * density
+                setStroke((1.5f * density).toInt().coerceAtLeast(1), Color.parseColor("#5D4037"))
+            }
             isAllCaps = false
-            setPadding((16 * density).toInt(), 0, (16 * density).toInt(), 0)
+            setPadding((14 * density).toInt(), 0, (14 * density).toInt(), 0)
             setOnClickListener {
                 onKitSelectorClicked?.invoke()
             }
@@ -88,36 +83,96 @@ class HeaderView @JvmOverloads constructor(
             visibility = View.GONE
         }
         val adParams = LayoutParams(
-            (240 * density).toInt(),
+            (200 * density).toInt(),
             (36 * density).toInt()
         ).apply {
             gravity = Gravity.CENTER
         }
         addView(adSlotContainer, adParams)
 
-        // 3. Tombol Settings ⚙ (Kanan / End)
+        // 3. Baris Tombol Navigasi Halaman di Kanan (End)
+        val rightActionsRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val menuItems = SettingsMenuProviderImpl.getMenuItems()
+        val devItem = menuItems.firstOrNull { it.id == "dev_mode" }
+        val editLayoutItem = menuItems.firstOrNull { it.id == "edit_layout" }
+
+        // Jika build debug menyediakan Mode Developer, tampilkan tombol langsung ke Halaman Mode Developer
+        if (devItem != null) {
+            val devButton = Button(context).apply {
+                text = "🛠 ${devItem.title}"
+                textSize = 11.5f
+                setTextColor(Color.WHITE)
+                isAllCaps = false
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#E65100"))
+                    cornerRadius = 10f * density
+                }
+                setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
+                setOnClickListener {
+                    val activity = context as? Activity ?: return@setOnClickListener
+                    val currentBoardView = boardView ?: return@setOnClickListener
+                    SettingsMenuProviderImpl.onMenuItemSelected(devItem, activity, currentBoardView)
+                }
+            }
+            rightActionsRow.addView(
+                devButton,
+                LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (36 * density).toInt()
+                ).apply {
+                    marginEnd = (8 * density).toInt()
+                }
+            )
+        }
+
+        // Tombol Edit Tata Letak / Pengaturan
         settingsButton = Button(context).apply {
-            text = "⚙"
-            textSize = 16f
+            text = "📐 Edit Tata Letak"
+            textSize = 11.5f
             setTextColor(Color.WHITE)
-            background = buttonBg.constantState?.newDrawable() ?: buttonBg
+            isAllCaps = false
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#2A2622"))
+                cornerRadius = 10f * density
+                setStroke((1.5f * density).toInt().coerceAtLeast(1), Color.parseColor("#443D36"))
+            }
             setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
             setOnClickListener {
                 if (onSettingsClicked != null) {
                     onSettingsClicked?.invoke()
+                } else if (editLayoutItem != null) {
+                    val activity = context as? Activity
+                    val currentBoardView = boardView
+                    if (activity != null && currentBoardView != null) {
+                        SettingsMenuProviderImpl.onMenuItemSelected(editLayoutItem, activity, currentBoardView)
+                    } else {
+                        showSettingsMenu()
+                    }
                 } else {
                     showSettingsMenu()
                 }
             }
         }
-        val settingsParams = LayoutParams(
-            (44 * density).toInt(),
-            (36 * density).toInt()
+        rightActionsRow.addView(
+            settingsButton,
+            LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                (36 * density).toInt()
+            )
+        )
+
+        val rightParams = LayoutParams(
+            LayoutParams.WRAP_CONTENT,
+            LayoutParams.WRAP_CONTENT
         ).apply {
             gravity = Gravity.CENTER_VERTICAL or Gravity.END
             marginEnd = padHorizontal
         }
-        addView(settingsButton, settingsParams)
+        addView(rightActionsRow, rightParams)
     }
 
     /**

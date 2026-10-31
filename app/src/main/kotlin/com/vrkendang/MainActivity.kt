@@ -2,6 +2,7 @@ package com.vrkendang
 
 import android.app.Activity
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.os.Build
@@ -15,6 +16,7 @@ import android.widget.ScrollView
 import android.widget.TextView
 import com.vrkendang.audio.AudioEngine
 import com.vrkendang.audio.KitAudioLoader
+import com.vrkendang.kitcore.parser.KitJsonParser
 import com.vrkendang.repository.AssetManagerKitAssetSource
 import com.vrkendang.repository.FileLayoutOverrideSource
 import com.vrkendang.repository.KitRepository
@@ -24,13 +26,13 @@ import com.vrkendang.view.KendangBoardView
 import java.io.File
 
 /**
- * Activity utama VR Kendang.
+ * Activity utama permainan VR Kendang.
  *
  * Sesuai Desain & Spesifikasi:
  * - ConstraintLayout: HeaderView di atas (48dp), KendangBoardView mengisi sisa layar (Task 9.1).
- * - CalibrationOverlayView: Mode kalibrasi tata letak pemain dengan kontrol ringkas (Task 10.1–10.6).
- * - Kit Selector: menampilkan nama kit aktif dan membuka dialog daftar kit dari assets/kits/ (Task 9.2).
- * - Settings Menu: membuka opsi Edit Tata Letak (semua build) dan Mode Developer (khusus build debug) (Task 9.3).
+ * - Navigasi halaman penuh terpisah:
+ *   - Halaman Edit Tata Letak ([CalibrationActivity])
+ *   - Halaman Mode Developer (khusus build debug)
  * - KeepScreenOn, Landscape, Immersive Sticky, Gesture Exclusion Rects (Task 7.4).
  * - Siklus hidup audio: pauseStream pada onStop, resumeStream pada onStart, closeStream pada onDestroy (Task 5.8).
  */
@@ -46,6 +48,10 @@ class MainActivity : Activity() {
     private lateinit var kitRepository: KitRepository
     private val kitAudioLoader = KitAudioLoader()
 
+    private var activeKitId: String = KitRepository.DEFAULT_KIT_ID
+    private var usingDevWorkingKit: Boolean = false
+    private var lastKnownDevKitModified: Long = 0L
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -53,13 +59,13 @@ class MainActivity : Activity() {
             // 1. Kunci layar agar selalu menyala selama aplikasi di foreground (Task 7.4)
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
-            // 2. Kunci orientasi landscape secara aman (sudah dideklarasikan juga di AndroidManifest.xml) (Task 7.4)
+            // 2. Kunci orientasi landscape secara aman (Task 7.4)
             runCatching {
                 @Suppress("SourceLockedOrientationActivity")
                 requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             }.onFailure { Log.w(TAG, "Gagal mengunci orientasi secara programatik", it) }
 
-            // 3. Muat layout utama ConstraintLayout terlebih dahulu sebelum mengakses DecorView/InsetsController (Task 9.1 & 10.1)
+            // 3. Muat layout utama ConstraintLayout terlebih dahulu (Task 9.1)
             setContentView(R.layout.activity_main)
 
             // 4. Terapkan mode Immersive Sticky setelah content view siap (Task 7.4)
@@ -84,8 +90,11 @@ class MainActivity : Activity() {
                 showKitSelectorDialog()
             }
 
-            // 7. Muat dan aktifkan kit awal bawaan (Mode Developer dibuka hanya saat dipilih dari menu Pengaturan ⚙)
-            loadDefaultKit()
+            val devKitJson = File(filesDir, "dev-kit/kit.json")
+            lastKnownDevKitModified = if (devKitJson.isFile) devKitJson.lastModified() else 0L
+
+            // 7. Muat dan aktifkan kit awal bawaan
+            loadBuiltInKit(KitRepository.DEFAULT_KIT_ID)
         } catch (t: Throwable) {
             Log.e(TAG, "Gagal melakukan inisialisasi MainActivity", t)
             showDiagnosticErrorScreen(t)
@@ -93,8 +102,7 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Menampilkan layar diagnostik stacktrace apabila terjadi error tak terduga saat inisialisasi,
-     * sehingga aplikasi tidak langsung tertutup (force close) tanpa informasi di perangkat fisik.
+     * Menampilkan layar diagnostik stacktrace apabila terjadi error tak terduga saat inisialisasi.
      */
     private fun showDiagnosticErrorScreen(error: Throwable) {
         runCatching {
@@ -114,17 +122,18 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Membuka Mode Kalibrasi Tata Letak (Task 10.1).
+     * Membuka Halaman Penuh Kalibrasi Tata Letak ([CalibrationActivity]) (Task 10.1).
      */
     fun openCalibrationMode() {
-        val activeKit = boardView.kit ?: return
-        val baseKit = kitRepository.getBaseKit(activeKit.kitId) ?: activeKit
-        calibrationOverlay.startCalibration(activeKit, baseKit)
+        val activeKit = boardView.kit
+        val intent = Intent(this, CalibrationActivity::class.java).apply {
+            putExtra(CalibrationActivity.EXTRA_KIT_ID, activeKit?.kitId ?: activeKitId)
+        }
+        startActivity(intent)
     }
 
     @Deprecated("Deprecated in Java")
     override fun onBackPressed() {
-        // Jika mode kalibrasi aktif, tangani konfirmasi keluar / simpan perubahan (Task 10.4)
         if (::calibrationOverlay.isInitialized && calibrationOverlay.handleBackPressed()) {
             return
         }
@@ -135,9 +144,23 @@ class MainActivity : Activity() {
     override fun onStart() {
         super.onStart()
         // Resume audio stream saat kembali ke foreground (Task 5.8).
-        // Kegagalan native tidak boleh menjatuhkan UI; audio cukup hening.
         runCatching { AudioEngine.resumeStream() }
             .onFailure { Log.e(TAG, "Gagal resume stream audio", it) }
+
+        // Segarkan kit aktif saat kembali dari halaman CalibrationActivity atau Mode Developer
+        runCatching {
+            val devKitJson = File(filesDir, "dev-kit/kit.json")
+            val currentDevMod = if (devKitJson.isFile) devKitJson.lastModified() else 0L
+            if (currentDevMod > lastKnownDevKitModified) {
+                lastKnownDevKitModified = currentDevMod
+                usingDevWorkingKit = true
+            }
+            if (usingDevWorkingKit && devKitJson.isFile) {
+                loadDevWorkingKit()
+            } else if (::kitRepository.isInitialized) {
+                loadBuiltInKit(activeKitId)
+            }
+        }.onFailure { Log.w(TAG, "Gagal menyegarkan kit pada onStart", it) }
     }
 
     override fun onStop() {
@@ -156,7 +179,6 @@ class MainActivity : Activity() {
     override fun onWindowFocusChanged(hasFocus: Boolean) {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) {
-            // Pulihkan Immersive Sticky Mode saat window mendapatkan fokus kembali
             applyImmersiveStickyMode()
         }
     }
@@ -190,14 +212,17 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Memuat kit bawaan pertama (new-metro) dan mengaktifkannya di mesin audio serta board view.
+     * Memuat kit bawaan dari KitRepository (termasuk override tata letak pemain bila ada).
      */
-    private fun loadDefaultKit() {
+    private fun loadBuiltInKit(kitId: String) {
         val kit = try {
-            kitRepository.selectKit(KitRepository.DEFAULT_KIT_ID)
+            kitRepository.selectKit(kitId)
         } catch (e: Exception) {
             return
         }
+        activeKitId = kit.kitId
+        usingDevWorkingKit = false
+
         val soundSource = { path: String ->
             assets.open("${KitRepository.KITS_ASSET_ROOT}/${kit.kitId}/$path")
         }
@@ -209,26 +234,53 @@ class MainActivity : Activity() {
     }
 
     /**
-     * Menampilkan dialog pemilihan kit dari assets/kits/ (Task 9.2).
+     * Memuat kit hasil racikan dari halaman Mode Developer (bila ada di filesDir/dev-kit/).
+     */
+    private fun loadDevWorkingKit() {
+        val devKitDir = File(filesDir, "dev-kit")
+        val kitJsonFile = File(devKitDir, "kit.json")
+        if (!kitJsonFile.isFile) return
+
+        val kit = KitJsonParser.parse(kitJsonFile.readText())
+        usingDevWorkingKit = true
+
+        val soundSource = { path: String ->
+            File(devKitDir, path).inputStream()
+        }
+        val activation = kitAudioLoader.activate(kit, soundSource)
+        boardView.kit = kit
+        boardView.slotByZoneId = activation.slotByZoneId
+        headerView.setActiveKitName("${kit.name} (Dev)")
+    }
+
+    /**
+     * Menampilkan dialog pemilihan kit dari assets/kits/ serta salinan kerja Dev jika tersedia (Task 9.2).
      */
     private fun showKitSelectorDialog() {
-        val kits = kitRepository.getKits()
-        if (kits.isEmpty()) return
+        val builtInKits = kitRepository.getKits()
+        val devKitFile = File(filesDir, "dev-kit/kit.json")
+        val devKit = if (devKitFile.isFile) {
+            runCatching { KitJsonParser.parse(devKitFile.readText()) }.getOrNull()
+        } else null
 
-        val kitNames = kits.map { it.name }.toTypedArray()
+        val labels = mutableListOf<String>()
+        val actions = mutableListOf<() -> Unit>()
+
+        for (kit in builtInKits) {
+            labels.add("🥁 ${kit.name}")
+            actions.add { loadBuiltInKit(kit.kitId) }
+        }
+        if (devKit != null) {
+            labels.add("🛠 ${devKit.name} (Kit Hasil Edit Developer)")
+            actions.add { loadDevWorkingKit() }
+        }
+
+        if (labels.isEmpty()) return
 
         AlertDialog.Builder(this)
             .setTitle("Pilih Kit Kendang")
-            .setItems(kitNames) { _, which ->
-                val chosen = kits[which]
-                val activatedKit = kitRepository.selectKit(chosen.kitId)
-                val soundSource = { path: String ->
-                    assets.open("${KitRepository.KITS_ASSET_ROOT}/${activatedKit.kitId}/$path")
-                }
-                val activation = kitAudioLoader.activate(activatedKit, soundSource)
-                boardView.kit = activatedKit
-                boardView.slotByZoneId = activation.slotByZoneId
-                headerView.setActiveKitName(activatedKit.name)
+            .setItems(labels.toTypedArray()) { _, which ->
+                actions[which].invoke()
             }
             .setNegativeButton("Batal", null)
             .show()
