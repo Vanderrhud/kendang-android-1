@@ -49,6 +49,12 @@ android {
         jvmTarget = "17"
     }
 
+    testOptions {
+        // Memungkinkan unit test JVM memanggil android.util.Log tanpa crash.
+        // Log call di SoundLoader cukup di-stub (tidak diverifikasi di test).
+        unitTests.isReturnDefaultValues = true
+    }
+
     signingConfigs {
         getByName("debug") {
             storeFile = file("debug.keystore")
@@ -75,4 +81,7 @@ android {
 dependencies {
     implementation(project(":kit-core"))
     implementation("com.google.oboe:oboe:1.9.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    testImplementation(kotlin("test"))
+    testImplementation(project(":kit-core"))
 }

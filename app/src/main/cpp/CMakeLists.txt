@@ -8,6 +8,8 @@ find_package(oboe REQUIRED CONFIG)
 
 add_library(kendang_audio SHARED
     native-lib.cpp
+    AudioEngine.cpp
+    Resampler.cpp
 )
 
 target_include_directories(kendang_audio PRIVATE
