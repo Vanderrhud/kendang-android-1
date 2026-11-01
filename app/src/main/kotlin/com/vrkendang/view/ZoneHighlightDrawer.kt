@@ -72,14 +72,25 @@ object ZoneHighlightDrawer {
             }
 
             "split" -> {
-                canvas.save()
-                if (zone.region == "upper") {
-                    canvas.clipRect(cx - rx, cy - ry, cx + rx, cy)
+                val zoneCount = drum.zones.size
+                val angleOffset = drum.divider?.angle ?: 0f
+                if (zoneCount == 2 && angleOffset == 0f && drum.zones.any { it.region == "upper" }) {
+                    canvas.save()
+                    if (zone.region == "upper") {
+                        canvas.clipRect(cx - rx, cy - ry, cx + rx, cy)
+                    } else {
+                        canvas.clipRect(cx - rx, cy, cx + rx, cy + ry)
+                    }
+                    canvas.drawOval(drumOval, highlightPaint)
+                    canvas.restore()
+                } else if (zoneCount > 1) {
+                    val zoneIndex = drum.zones.indexOfFirst { it.id == zone.id }.takeIf { it >= 0 } ?: 0
+                    val sliceDeg = 360f / zoneCount
+                    val startAngle = ((angleOffset + zoneIndex * sliceDeg) % 360f + 360f) % 360f
+                    canvas.drawArc(drumOval, startAngle, sliceDeg, true, highlightPaint)
                 } else {
-                    canvas.clipRect(cx - rx, cy, cx + rx, cy + ry)
+                    canvas.drawOval(drumOval, highlightPaint)
                 }
-                canvas.drawOval(drumOval, highlightPaint)
-                canvas.restore()
             }
 
             "bass" -> {

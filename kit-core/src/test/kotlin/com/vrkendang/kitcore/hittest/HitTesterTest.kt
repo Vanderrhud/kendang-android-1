@@ -90,6 +90,84 @@ class HitTesterTest {
     }
 
     @Test
+    fun testSplitRadialSectorsWithAngleRotation() {
+        // Kit dengan drum radial 4 zona, aspect 1.0 agar xu = x
+        val radial4Kit = KitData(
+            formatVersion = 1,
+            kitId = "radial-4",
+            name = "Radial 4",
+            canvasAspect = 1.0f,
+            drums = listOf(
+                DrumData(
+                    id = "kendang-4",
+                    model = "split",
+                    center = Point(0.50f, 0.50f),
+                    radius = Radius(0.20f, 0.20f),
+                    divider = DividerData(angle = 0f),
+                    zones = listOf(
+                        ZoneData(id = "z-0", region = "sector", band = 0),
+                        ZoneData(id = "z-1", region = "sector", band = 1),
+                        ZoneData(id = "z-2", region = "sector", band = 2),
+                        ZoneData(id = "z-3", region = "sector", band = 3)
+                    )
+                )
+            )
+        )
+
+        // Sudut rotasi 0 derajat:
+        // z-0: 0..90 deg (kanan-bawah: x=0.6, y=0.6)
+        val hit0 = HitTester.findZone(radial4Kit, 0.60f, 0.60f)
+        assertNotNull(hit0)
+        assertEquals("z-0", hit0.id)
+
+        // z-1: 90..180 deg (kiri-bawah: x=0.4, y=0.6)
+        val hit1 = HitTester.findZone(radial4Kit, 0.40f, 0.60f)
+        assertNotNull(hit1)
+        assertEquals("z-1", hit1.id)
+
+        // z-2: 180..270 deg (kiri-atas: x=0.4, y=0.4)
+        val hit2 = HitTester.findZone(radial4Kit, 0.40f, 0.40f)
+        assertNotNull(hit2)
+        assertEquals("z-2", hit2.id)
+
+        // z-3: 270..360 deg (kanan-atas: x=0.6, y=0.4)
+        val hit3 = HitTester.findZone(radial4Kit, 0.60f, 0.40f)
+        assertNotNull(hit3)
+        assertEquals("z-3", hit3.id)
+
+        // Uji rotasi garis vertikal pada 2 zona (angle = 90)
+        val split2Rotated = KitData(
+            formatVersion = 1,
+            kitId = "split-rot",
+            name = "Split Rotated",
+            canvasAspect = 1.0f,
+            drums = listOf(
+                DrumData(
+                    id = "drum-rot",
+                    model = "split",
+                    center = Point(0.50f, 0.50f),
+                    radius = Radius(0.20f, 0.20f),
+                    divider = DividerData(angle = 90f),
+                    zones = listOf(
+                        ZoneData(id = "kiri", region = "sector", band = 0),
+                        ZoneData(id = "kanan", region = "sector", band = 1)
+                    )
+                )
+            )
+        )
+
+        // Titik sisi kiri (x=0.4, y=0.5 -> atan2=180 deg, relativeDeg = (180 - 90) = 90 deg -> index 0: kiri)
+        val hitLeft = HitTester.findZone(split2Rotated, 0.40f, 0.50f)
+        assertNotNull(hitLeft)
+        assertEquals("kiri", hitLeft.id)
+
+        // Titik sisi kanan (x=0.6, y=0.5 -> atan2=0 deg, relativeDeg = (0 - 90 + 360) = 270 deg -> index 1: kanan)
+        val hitRight = HitTester.findZone(split2Rotated, 0.60f, 0.50f)
+        assertNotNull(hitRight)
+        assertEquals("kanan", hitRight.id)
+    }
+
+    @Test
     fun testSingleModelKecil1() {
         // Kecil 1: center x=0.52, y=0.35, radius rx=0.17, ry=0.17
         val insideZone = HitTester.findZone(newMetroKit, 0.52f, 0.35f)

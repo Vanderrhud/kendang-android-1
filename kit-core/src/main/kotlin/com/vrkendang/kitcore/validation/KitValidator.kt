@@ -104,10 +104,17 @@ object KitValidator {
                     }
                 }
                 "split" -> {
+                    if (drum.zones.isEmpty() || drum.zones.size > 4) {
+                        errors.add("Drum model 'split' ('${drum.id}') harus memiliki antara 1 sampai 4 zona (ditemukan: ${drum.zones.size})")
+                    }
                     for (zone in drum.zones) {
-                        if (zone.region != "upper" && zone.region != "lower") {
-                            errors.add("Zona '${zone.id}' pada drum split harus memiliki region 'upper' atau 'lower' (ditemukan: '${zone.region}')")
+                        if (zone.region != "upper" && zone.region != "lower" && zone.region != "sector" && zone.region != "full") {
+                            errors.add("Zona '${zone.id}' pada drum split harus memiliki region 'upper' atau 'lower' atau 'sector' (ditemukan: '${zone.region}')")
                         }
+                    }
+                    val div = drum.divider
+                    if (div?.angle != null && (div.angle < 0.0f || div.angle > 360.0f)) {
+                        errors.add("Parameter divider angle drum '${drum.id}' harus di rentang 0.0..360.0 (ditemukan: ${div.angle})")
                     }
                 }
                 "single" -> {

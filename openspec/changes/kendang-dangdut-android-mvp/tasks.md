@@ -102,7 +102,8 @@
 - [x] 11.6 Implementasikan tombol **`Ekspor`** dan **`Impor`** paket `.vrkendang` secara terpisah menggunakan Storage Access Framework (`ACTION_CREATE_DOCUMENT` dan `ACTION_OPEN_DOCUMENT`): `Ekspor` menyusun paket `.vrkendang` di cache, memvalidasi via `KitPackageReader` + `KitValidator`, lalu menulis ke URI yang dipilih pengguna; `Impor` mengekstrak dan memvalidasi file `.vrkendang` dari penyimpanan HP ke `filesDir/dev-kit/` — verifikasi: `Ekspor` menghasilkan file `.vrkendang` valid tanpa mencampuradukkannya dengan tombol `✓ Simpan` internal; `Impor` memuat kembali file `.vrkendang` dengan aman.
 - [x] 11.7 Implementasikan indikator perubahan belum disimpan dan dialog konfirmasi simpan/buang saat keluar Mode Developer atau mengganti kit.
 - [x] 11.8 Implementasikan pemuatan/penggantian sample saat stream berjalan tanpa memblokir audio callback: urai dan resample di luar thread audio, tukar sample secara atomik, dan selesaikan/hentikan suara lama secara mulus.
-- [x] 11.9 Batasi cakupan kendang MVP ke 4 kendang tetap (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`) dengan jumlah zona dinamis pada Bass (1–5 zona) tanpa tombol pengubah urutan prioritas di UI.
+- [x] 11.9 Konfigurasi zona fleksibel 1 s/d 4 zona untuk kendang non-bass dengan model juring radial (1/2, 1/3, 1/4 lingkaran) dan slider putaran sudut rotasi (0° - 360°) untuk memutar garis sekat secara langsung — verifikasi: unit test HitTesterTest dan KitValidatorTest membuktikan evaluasi juring radial dan putaran sudut berfungsi akurat.
+- [x] 11.10 Fitur tambah kendang baru (`+ Kendang` dengan nama bebas dan pilihan 1–4 zona) dan hapus kendang (`Hapus Kendang` dengan proteksi tidak boleh menghapus Bass) di Mode Developer — verifikasi: unit test DevKitAuthoringSessionTest membuktikan penambahan kendang baru dan penghapusan kendang non-bass serta penolakan penghapusan Bass.
 
 ## 12. Verifikasi Integrasi & Kriteria Keberhasilan
 

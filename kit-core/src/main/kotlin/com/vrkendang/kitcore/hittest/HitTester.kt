@@ -50,7 +50,7 @@ object HitTester {
                 // Berada di dalam kulit kendang, tentukan zona berdasarkan model
                 val matchedZone = when (drum.model) {
                     "bass" -> findBassZone(drum, xu, yu, cxu, cyu, rx, ry)
-                    "split" -> findSplitZone(drum, yu, cyu)
+                    "split" -> findSplitZone(drum, xu, yu, cxu, cyu, rx, ry)
                     "single" -> findSingleZone(drum)
                     else -> null
                 }
@@ -132,13 +132,43 @@ object HitTester {
     }
 
     /**
-     * Evaluasi hit model split (Sedang & Kecil 2):
-     * upper bila Y_u < CY_u
-     * lower bila Y_u >= CY_u (termasuk garis tengah Y_u == CY_u)
+     * Evaluasi hit model split / radial (Sedang, Kecil 2, dan kendang kustom 1..4 zona):
+     * - Jika hanya 1 zona: langsung mengembalikan zona tersebut.
+     * - Jika 2 zona default tanpa rotasi (angle == 0): upper (Y < cy), lower (Y >= cy).
+     * - Jika dirotasi atau memiliki 3-4 zona: pembagian juring radial berdasarkan atan2 dan parameter angle.
      */
-    private fun findSplitZone(drum: DrumData, yu: Float, cyu: Float): ZoneData? {
-        val targetRegion = if (yu < cyu) "upper" else "lower"
-        return drum.zones.firstOrNull { it.region == targetRegion }
+    private fun findSplitZone(
+        drum: DrumData,
+        xu: Float,
+        yu: Float,
+        cxu: Float,
+        cyu: Float,
+        rx: Float,
+        ry: Float
+    ): ZoneData? {
+        if (drum.zones.isEmpty()) return null
+        if (drum.zones.size == 1) return drum.zones.first()
+
+        val angleOffset = drum.divider?.angle ?: 0f
+
+        // Kompatibilitas mundur penuh untuk model split 2 zona horizontal standar tanpa rotasi
+        if (drum.zones.size == 2 && angleOffset == 0f && drum.zones.any { it.region == "upper" }) {
+            val targetRegion = if (yu < cyu) "upper" else "lower"
+            return drum.zones.firstOrNull { it.region == targetRegion } ?: drum.zones.first()
+        }
+
+        // Pembagian juring radial (1/2, 1/3, 1/4 lingkaran)
+        val normX = if (rx > 0f) (xu - cxu) / rx else 0f
+        val normY = if (ry > 0f) (yu - cyu) / ry else 0f
+        val rad = kotlin.math.atan2(normY.toDouble(), normX.toDouble())
+        val deg = Math.toDegrees(rad).toFloat()
+        val normalizedDeg = (deg + 360f) % 360f
+
+        val relativeDeg = ((normalizedDeg - angleOffset) % 360f + 360f) % 360f
+        val sliceDeg = 360f / drum.zones.size
+        val index = (relativeDeg / sliceDeg).toInt().coerceIn(0, drum.zones.size - 1)
+
+        return drum.zones.getOrNull(index) ?: drum.zones.first()
     }
 
     /**

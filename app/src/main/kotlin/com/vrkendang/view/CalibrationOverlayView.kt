@@ -403,10 +403,26 @@ class CalibrationOverlayView @JvmOverloads constructor(
                 }
 
                 "split" -> {
-                    canvas.save()
-                    canvas.clipPath(ovalPath)
-                    canvas.drawLine(cx - rx, cy, cx + rx, cy, guideLinePaint)
-                    canvas.restore()
+                    val zoneCount = drum.zones.size
+                    val angleOffset = drum.divider?.angle ?: 0f
+                    if (zoneCount == 2 && angleOffset == 0f && drum.zones.any { it.region == "upper" }) {
+                        canvas.save()
+                        canvas.clipPath(ovalPath)
+                        canvas.drawLine(cx - rx, cy, cx + rx, cy, guideLinePaint)
+                        canvas.restore()
+                    } else if (zoneCount > 1) {
+                        canvas.save()
+                        canvas.clipPath(ovalPath)
+                        val sliceDeg = 360f / zoneCount
+                        for (i in 0 until zoneCount) {
+                            val spokeAngleDeg = angleOffset + (i * sliceDeg)
+                            val spokeRad = Math.toRadians(spokeAngleDeg.toDouble())
+                            val targetX = cx + (rx * kotlin.math.cos(spokeRad)).toFloat()
+                            val targetY = cy + (ry * kotlin.math.sin(spokeRad)).toFloat()
+                            canvas.drawLine(cx, cy, targetX, targetY, guideLinePaint)
+                        }
+                        canvas.restore()
+                    }
                 }
             }
         }

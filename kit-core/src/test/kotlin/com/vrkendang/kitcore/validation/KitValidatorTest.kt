@@ -275,4 +275,56 @@ class KitValidatorTest {
         val errorsAbs = KitValidator.validate(kitAbs)
         assertTrue(errorsAbs.any { it.contains("absolut") })
     }
+
+    @Test
+    fun testSplitRadialZoneCountAndAngleValidations() {
+        val baseKit = createValidKit()
+        // Split dengan 3 zona dan angle valid (valid)
+        val kitSplit3 = baseKit.copy(
+            drums = listOf(
+                DrumData(
+                    id = "sedang",
+                    model = "split",
+                    center = Point(0.6f, 0.5f),
+                    radius = Radius(0.2f, 0.2f),
+                    divider = DividerData(angle = 45f),
+                    zones = listOf(
+                        ZoneData(id = "sedang-1", region = "sector", band = 0),
+                        ZoneData(id = "sedang-2", region = "sector", band = 1),
+                        ZoneData(id = "sedang-3", region = "sector", band = 2)
+                    )
+                )
+            )
+        )
+        assertTrue(KitValidator.validate(kitSplit3).isEmpty(), "Split dengan 3 zona harus valid")
+
+        // Split dengan 5 zona (tidak valid, max 4)
+        val fiveZones = (1..5).map {
+            ZoneData(id = "sedang-$it", region = "sector", band = it - 1)
+        }
+        val kitSplit5 = baseKit.copy(
+            drums = listOf(
+                DrumData(
+                    id = "sedang",
+                    model = "split",
+                    center = Point(0.6f, 0.5f),
+                    radius = Radius(0.2f, 0.2f),
+                    zones = fiveZones
+                )
+            )
+        )
+        val errors5 = KitValidator.validate(kitSplit5)
+        assertTrue(errors5.any { it.contains("1 sampai 4 zona") })
+
+        // Angle di luar 0..360
+        val kitBadAngle = kitSplit3.copy(
+            drums = listOf(
+                kitSplit3.drums[0].copy(
+                    divider = DividerData(angle = 400f)
+                )
+            )
+        )
+        val errorsAngle = KitValidator.validate(kitBadAngle)
+        assertTrue(errorsAngle.any { it.contains("angle") })
+    }
 }

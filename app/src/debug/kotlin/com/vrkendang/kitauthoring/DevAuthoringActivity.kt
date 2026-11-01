@@ -394,6 +394,134 @@ class DevAuthoringActivity : Activity() {
             }
             tabsRow.addView(tabBtn)
         }
+
+        val addDrumBtn = Button(this).apply {
+            text = "+ Kendang"
+            textSize = 10.5f
+            isAllCaps = false
+            setTextColor(Color.parseColor("#81C784"))
+            paint.isFakeBoldText = true
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#1B3B2B"))
+                cornerRadius = 6f * density
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#4CAF50"))
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                (26 * density).toInt()
+            )
+            setPadding((10 * density).toInt(), 0, (10 * density).toInt(), 0)
+            setOnClickListener {
+                showAddDrumDialog(tabsRow, previewBoard, rightPanelContainer)
+            }
+        }
+        tabsRow.addView(addDrumBtn)
+    }
+
+    private fun showAddDrumDialog(
+        tabsRow: LinearLayout,
+        previewBoard: KendangBoardView,
+        rightPanelContainer: LinearLayout
+    ) {
+        val density = resources.displayMetrics.density
+        val dialogLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding((16 * density).toInt(), (12 * density).toInt(), (16 * density).toInt(), (8 * density).toInt())
+        }
+
+        val nameInputLabel = TextView(this).apply {
+            text = "Nama Kendang Baru:"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            setPadding(0, 0, 0, (4 * density).toInt())
+        }
+        dialogLayout.addView(nameInputLabel)
+
+        val nameEditText = EditText(this).apply {
+            hint = "Misal: Kecil 3, Dut Tambahan"
+            textSize = 12f
+            setSingleLine()
+        }
+        dialogLayout.addView(nameEditText)
+
+        val zoneCountLabel = TextView(this).apply {
+            text = "Pilih Jumlah Zona Awal (1 - 4):"
+            textSize = 11f
+            setTextColor(Color.WHITE)
+            setPadding(0, (10 * density).toInt(), 0, (6 * density).toInt())
+        }
+        dialogLayout.addView(zoneCountLabel)
+
+        var selectedInitialZones = 2
+        val zoneButtonsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val zoneButtons = mutableListOf<Button>()
+        fun updateZoneButtonStyles() {
+            for ((idx, b) in zoneButtons.withIndex()) {
+                val count = idx + 1
+                val isSel = (count == selectedInitialZones)
+                b.setTextColor(Color.parseColor(if (isSel) "#14110F" else "#E0D8D0"))
+                b.background = GradientDrawable().apply {
+                    setColor(Color.parseColor(if (isSel) "#FFB74D" else "#2B2520"))
+                    cornerRadius = 4f * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(if (isSel) "#FFA726" else "#4A3F37"))
+                }
+            }
+        }
+
+        for (z in 1..4) {
+            val zBtn = Button(this).apply {
+                text = when (z) {
+                    1 -> "1"
+                    2 -> "2"
+                    3 -> "3"
+                    else -> "4"
+                }
+                textSize = 11f
+                isAllCaps = false
+                paint.isFakeBoldText = true
+                layoutParams = LinearLayout.LayoutParams(0, (30 * density).toInt(), 1.0f).apply {
+                    marginEnd = (4 * density).toInt()
+                }
+                setPadding(0, 0, 0, 0)
+                setOnClickListener {
+                    selectedInitialZones = z
+                    updateZoneButtonStyles()
+                }
+            }
+            zoneButtons.add(zBtn)
+            zoneButtonsRow.addView(zBtn)
+        }
+        dialogLayout.addView(zoneButtonsRow)
+        updateZoneButtonStyles()
+
+        AlertDialog.Builder(this)
+            .setTitle("Tambah Kendang Baru")
+            .setView(dialogLayout)
+            .setPositiveButton("Tambah") { _, _ ->
+                val name = nameEditText.text.toString().trim()
+                if (name.isNotEmpty()) {
+                    runCatching {
+                        val (updatedKit, newDrum) = session.addDrum(name, selectedInitialZones)
+                        activateKitAudio(updatedKit)
+                        selectedDrumId = newDrum.id
+                        selectedZoneId = newDrum.zones.first().id
+                        previewBoard.kit = updatedKit
+                        previewBoard.selectedDrumId = selectedDrumId
+                        previewBoard.selectedZoneId = selectedZoneId
+                        refreshHeaderStatus()
+                        populateDrumTabs(tabsRow, previewBoard, rightPanelContainer)
+                        populateCompactRightPanel(rightPanelContainer, previewBoard, tabsRow)
+                    }.onFailure { err ->
+                        Toast.makeText(this, "Gagal menambah kendang: ${err.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+            .setNegativeButton("Batal", null)
+            .show()
     }
 
     private fun populateCompactRightPanel(
@@ -411,63 +539,117 @@ class DevAuthoringActivity : Activity() {
 
         val displayName = formatDrumDisplayName(drum.id).uppercase()
 
-        // Judul Konfigurasi Kendang Terpilih
+        // Judul Konfigurasi Kendang Terpilih + Tombol Hapus (jika bukan bass)
+        val headerRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, (4 * density).toInt())
+        }
         val titleTv = TextView(this).apply {
             text = "KONFIGURASI: $displayName"
             textSize = 12f
             setTextColor(Color.parseColor("#FFB74D"))
             paint.isFakeBoldText = true
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+        }
+        headerRow.addView(titleTv)
+
+        if (drum.id != "bass") {
+            val deleteDrumBtn = Button(this).apply {
+                text = "Hapus Kendang"
+                textSize = 9.5f
+                isAllCaps = false
+                setTextColor(Color.parseColor("#FF8A80"))
+                paint.isFakeBoldText = true
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#3A1D1D"))
+                    cornerRadius = 4f * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#D32F2F"))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (22 * density).toInt()
+                )
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+                setOnClickListener {
+                    AlertDialog.Builder(this@DevAuthoringActivity)
+                        .setTitle("Hapus Kendang")
+                        .setMessage("Apakah Anda yakin ingin menghapus kendang '${formatDrumDisplayName(drum.id)}' beserta seluruh zonanya?")
+                        .setPositiveButton("Hapus") { _, _ ->
+                            runCatching {
+                                val updatedKit = session.deleteDrum(drum.id)
+                                activateKitAudio(updatedKit)
+                                selectedDrumId = updatedKit.drums.firstOrNull()?.id ?: "bass"
+                                selectedZoneId = updatedKit.drums.firstOrNull()?.zones?.firstOrNull()?.id ?: "bass-1"
+                                previewBoard.kit = updatedKit
+                                previewBoard.selectedDrumId = selectedDrumId
+                                previewBoard.selectedZoneId = selectedZoneId
+                                refreshHeaderStatus()
+                                populateDrumTabs(tabsRow, previewBoard, rightContainer)
+                                populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+                            }.onFailure { err ->
+                                Toast.makeText(this@DevAuthoringActivity, "Gagal menghapus kendang: ${err.message}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .setNegativeButton("Batal", null)
+                        .show()
+                }
+            }
+            headerRow.addView(deleteDrumBtn)
+        }
+        rightContainer.addView(headerRow)
+
+        // Pemilih Jumlah Zona (Bass: 1..5, Non-Bass: 1..4)
+        val maxZones = if (drum.model == "bass") 5 else 4
+        val countRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             setPadding(0, 0, 0, (4 * density).toInt())
         }
-        rightContainer.addView(titleTv)
+        val countLabel = TextView(this).apply {
+            text = "Jumlah Zona:"
+            textSize = 10f
+            setTextColor(Color.parseColor("#A89F96"))
+            setPadding(0, 0, (6 * density).toInt(), 0)
+        }
+        countRow.addView(countLabel)
 
-        // Pemilih Jumlah Zona Bass (1 s/d 5 Zona Bebas)
-        if (drum.model == "bass") {
-            val countRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, 0, 0, (4 * density).toInt())
-            }
-            val countLabel = TextView(this).apply {
-                text = "Jumlah Zona:"
+        for (c in 1..maxZones) {
+            val isSelectedCount = (drum.zones.size == c)
+            val cBtn = Button(this).apply {
+                text = "$c"
                 textSize = 10f
-                setTextColor(Color.parseColor("#A89F96"))
-                setPadding(0, 0, (6 * density).toInt(), 0)
-            }
-            countRow.addView(countLabel)
-
-            for (c in 1..5) {
-                val isSelectedCount = (drum.zones.size == c)
-                val cBtn = Button(this).apply {
-                    text = "$c"
-                    textSize = 10f
-                    paint.isFakeBoldText = true
-                    setTextColor(Color.parseColor(if (isSelectedCount) "#14110F" else "#E0D8D0"))
-                    background = GradientDrawable().apply {
-                        setColor(Color.parseColor(if (isSelectedCount) "#FFB74D" else "#2B2520"))
-                        cornerRadius = 4f * density
-                        setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(if (isSelectedCount) "#FFA726" else "#4A3F37"))
-                    }
-                    layoutParams = LinearLayout.LayoutParams((28 * density).toInt(), (22 * density).toInt()).apply {
-                        marginEnd = (4 * density).toInt()
-                    }
-                    setPadding(0, 0, 0, 0)
-                    setOnClickListener {
-                        if (drum.zones.size != c) {
-                            val updated = session.setBassZoneCount(c)
-                            activateKitAudio(updated)
-                            previewBoard.kit = updated
-                            selectedZoneId = updated.drums.first { it.id == "bass" }.zones.first().id
-                            previewBoard.selectedZoneId = selectedZoneId
-                            refreshHeaderStatus()
-                            populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+                paint.isFakeBoldText = true
+                setTextColor(Color.parseColor(if (isSelectedCount) "#14110F" else "#E0D8D0"))
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor(if (isSelectedCount) "#FFB74D" else "#2B2520"))
+                    cornerRadius = 4f * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(if (isSelectedCount) "#FFA726" else "#4A3F37"))
+                }
+                layoutParams = LinearLayout.LayoutParams((28 * density).toInt(), (22 * density).toInt()).apply {
+                    marginEnd = (4 * density).toInt()
+                }
+                setPadding(0, 0, 0, 0)
+                setOnClickListener {
+                    if (drum.zones.size != c) {
+                        val updated = if (drum.model == "bass") {
+                            session.setBassZoneCount(c)
+                        } else {
+                            session.setDrumZoneCount(drum.id, c)
                         }
+                        activateKitAudio(updated)
+                        previewBoard.kit = updated
+                        val updatedDrum = updated.drums.first { it.id == drum.id }
+                        selectedZoneId = updatedDrum.zones.first().id
+                        previewBoard.selectedZoneId = selectedZoneId
+                        refreshHeaderStatus()
+                        populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
                     }
                 }
-                countRow.addView(cBtn)
             }
-            rightContainer.addView(countRow)
+            countRow.addView(cBtn)
         }
+        rightContainer.addView(countRow)
 
         // 1. Baris Chip Zona (1 Baris Rapi)
         val zoneChipsRow = LinearLayout(this).apply {
@@ -808,6 +990,61 @@ class DevAuthoringActivity : Activity() {
                     rightContainer.addView(sekatBox)
                 }
             }
+        }
+
+        // 4. Parameter Putaran Sudut (Khusus Kendang Non-Bass dengan >= 2 Zona)
+        if (drum.model != "bass" && drum.zones.size >= 2) {
+            val angleBox = createCompactBox()
+            val angleHeaderRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, (2 * density).toInt())
+            }
+            val angleTitle = TextView(this).apply {
+                text = "PARAMETER PUTARAN SUDUT (${drum.zones.size} ZONA)"
+                textSize = 10f
+                setTextColor(Color.parseColor("#A89F96"))
+                paint.isFakeBoldText = true
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+            }
+            angleHeaderRow.addView(angleTitle)
+
+            val resetAngleBtn = Button(this).apply {
+                text = "↺ Reset Sudut"
+                textSize = 9.5f
+                setTextColor(Color.parseColor("#E0D8D0"))
+                isAllCaps = false
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#2B2520"))
+                    cornerRadius = 5f * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#4A3F37"))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (22 * density).toInt()
+                )
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+                setOnClickListener {
+                    val updated = session.updateDrumAngle(drum.id, 0f)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                    populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+                }
+            }
+            angleHeaderRow.addView(resetAngleBtn)
+            angleBox.addView(angleHeaderRow)
+
+            val curAngle = drum.divider?.angle ?: 0f
+            angleBox.addView(
+                buildCompactDividerSlider("Sudut Rotasi (0° - 360°)", curAngle, 0.0f, 360.0f) { newAngle ->
+                    runCatching {
+                        val updated = session.updateDrumAngle(drum.id, newAngle)
+                        previewBoard.kit = updated
+                        refreshHeaderStatus()
+                    }
+                }
+            )
+            rightContainer.addView(angleBox)
         }
     }
 

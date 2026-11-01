@@ -62,27 +62,23 @@ Kulit Bass SHALL dibagi menjadi 5 zona akustik: Area 1 (Bass-1) di dalam busur p
 - **WHEN** jari menyentuh area di luar batas oval kulit Bass
 - **THEN** tidak ada zona Bass yang terdeteksi
 
-### Requirement: Hit-testing zona akustik Sedang dan Kecil 2 (Model split)
-Kulit Sedang dan Kecil 2 SHALL masing-masing dibagi menjadi 2 zona akustik oleh satu garis horizontal tengah: zona atas (`upper` untuk `Y < cy`) dan zona bawah (`lower` untuk `Y >= cy`, termasuk saat `Y == cy`). Untuk Sedang: bawah = Sedang-1 (`lower`), atas = Sedang-2 (`upper`). Untuk Kecil 2: bawah = Kecil2-1 (`lower`), atas = Kecil2-2 (`upper`).
+### Requirement: Hit-testing zona akustik model split dan radial
+Kulit kendang non-bass (Sedang, Kecil 2, dan kendang baru) SHALL mendukung pembagian zona akustik 1 s/d 4 zona: pembagian 2 zona horizontal default (`lower` dan `upper`), serta pembagian juring radial (1/2 lingkaran untuk 2 zona, 1/3 lingkaran untuk 3 zona, dan 1/4 lingkaran untuk 4 zona) dengan parameter putaran sudut rotasi `divider.angle` ($0^\circ - 360^\circ$). Visual highlight feedback SHALL merender potongan juring presisi (`drawArc` dengan `useCenter = true`) yang mengikuti orientasi sudut tersebut.
 
-#### Scenario: Sentuhan di bagian bawah Sedang menghasilkan Sedang-1
-- **WHEN** jari menyentuh bagian bawah oval Sedang (`Y >= cy`)
+#### Scenario: Sentuhan di bagian bawah Sedang menghasilkan Sedang-1 (default 2 zona)
+- **WHEN** jari menyentuh bagian bawah oval Sedang (`Y >= cy`) pada konfigurasi default 2 zona tanpa rotasi
 - **THEN** zona Sedang-1 terdeteksi sebagai zona lower
 
-#### Scenario: Sentuhan di bagian atas Sedang menghasilkan Sedang-2
-- **WHEN** jari menyentuh bagian atas oval Sedang (`Y < cy`)
+#### Scenario: Sentuhan di bagian atas Sedang menghasilkan Sedang-2 (default 2 zona)
+- **WHEN** jari menyentuh bagian atas oval Sedang (`Y < cy`) pada konfigurasi default 2 zona tanpa rotasi
 - **THEN** zona Sedang-2 terdeteksi sebagai zona upper
 
-#### Scenario: Sentuhan di bagian bawah Kecil 2 menghasilkan Kecil2-1
-- **WHEN** jari menyentuh bagian bawah oval Kecil 2 (`Y >= cy`)
-- **THEN** zona Kecil2-1 terdeteksi sebagai zona lower
+#### Scenario: Sentuhan pada kendang radial dengan rotasi sudut terdeteksi akurat
+- **WHEN** kendang dikonfigurasi dengan 2..4 zona radial dan sudut rotasi tertentu (misal garis vertikal $90^\circ$ memisahkan kiri dan kanan)
+- **THEN** sentuhan diuji terhadap sudut polar $\text{atan2}$ relatif terhadap rotasi, menghasilkan zona juring yang tepat sasaran
 
-#### Scenario: Sentuhan di bagian atas Kecil 2 menghasilkan Kecil2-2
-- **WHEN** jari menyentuh bagian atas oval Kecil 2 (`Y < cy`)
-- **THEN** zona Kecil2-2 terdeteksi sebagai zona upper
-
-#### Scenario: Sentuhan tepat pada garis tengah Y == cy masuk ke zona lower
-- **WHEN** jari menyentuh tepat pada garis tengah koordinat vertikal kendang (`Y == cy`)
+#### Scenario: Sentuhan tepat pada garis tengah Y == cy masuk ke zona lower (default 2 zona)
+- **WHEN** jari menyentuh tepat pada garis tengah koordinat vertikal kendang (`Y == cy`) pada mode 2 zona default
 - **THEN** sentuhan dievaluasi masuk ke zona bawah (lower), yaitu Sedang-1 pada Sedang atau Kecil2-1 pada Kecil 2
 
 ### Requirement: Hit-testing zona akustik Kecil 1 (Model single)

@@ -225,4 +225,53 @@ class DevKitAuthoringSessionTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun testAddAndDeleteDrumAndRadialConfiguration() {
+        val tempDir = File.createTempFile("dev-session-drums", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-custom-drums", "Test Custom Drums", null)
+
+            // 1. Tambah kendang baru dengan 3 zona
+            val (kitWithNew, newDrum) = session.addDrum("Kecil 3", 3)
+            assertEquals("kecil-3", newDrum.id)
+            assertEquals(3, newDrum.zones.size)
+            assertEquals("split", newDrum.model)
+            assertEquals(5, kitWithNew.drums.size) // bass, kecil1, sedang, kecil2, kecil-3
+            assertTrue(session.hasUnsavedChanges)
+
+            // 2. Ubah putaran sudut pada kendang baru
+            val kitRotated = session.updateDrumAngle("kecil-3", 75.0f)
+            val rotatedDrum = kitRotated.drums.first { it.id == "kecil-3" }
+            assertEquals(75.0f, rotatedDrum.divider?.angle)
+
+            // 3. Ubah jumlah zona kendang bawaan (kecil1 dari 1 zona -> 4 zona)
+            val kitKecil4 = session.setDrumZoneCount("kecil1", 4)
+            val updatedKecil1 = kitKecil4.drums.first { it.id == "kecil1" }
+            assertEquals(4, updatedKecil1.zones.size)
+            assertEquals("split", updatedKecil1.model)
+
+            // 4. Ubah kembali ke 1 zona
+            val kitKecil1 = session.setDrumZoneCount("kecil1", 1)
+            val singleKecil1 = kitKecil1.drums.first { it.id == "kecil1" }
+            assertEquals(1, singleKecil1.zones.size)
+            assertEquals("single", singleKecil1.model)
+
+            // 5. Hapus kendang yang baru ditambahkan
+            val kitAfterDelete = session.deleteDrum("kecil-3")
+            assertEquals(4, kitAfterDelete.drums.size)
+            assertFalse(kitAfterDelete.drums.any { it.id == "kecil-3" })
+
+            // 6. Proteksi Bass tidak boleh dihapus
+            assertFailsWith<IllegalArgumentException> {
+                session.deleteDrum("bass")
+            }
+
+            // 7. Seluruh perubahan valid menurut KitValidator
+            com.vrkendang.kitcore.validation.KitValidator.validateOrThrow(kitAfterDelete)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

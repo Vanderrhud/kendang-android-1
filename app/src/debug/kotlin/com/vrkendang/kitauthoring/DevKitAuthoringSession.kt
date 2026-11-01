@@ -509,6 +509,190 @@ class DevKitAuthoringSession(
     }
 
     /**
+     * Mengubah jumlah zona aktif pada kendang non-bass (1 sampai 4 zona) atau bass (1 sampai 5 zona).
+     */
+    fun setDrumZoneCount(drumId: String, count: Int): KitData {
+        if (drumId == "bass") {
+            return setBassZoneCount(count)
+        }
+
+        val targetCount = count.coerceIn(1, 4)
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val targetDrum = kit.drums.firstOrNull { it.id == drumId } ?: return kit
+
+        val oldZoneMap = targetDrum.zones.associateBy { it.id }
+        val oldZonesList = targetDrum.zones
+
+        val newZones = mutableListOf<com.vrkendang.kitcore.model.ZoneData>()
+        val newModel: String
+        val newDivider: DividerData?
+
+        if (targetCount == 1) {
+            newModel = "single"
+            val zoneId = "${drumId}-1"
+            val oldZone = oldZoneMap[zoneId] ?: oldZonesList.firstOrNull()
+            newZones.add(
+                com.vrkendang.kitcore.model.ZoneData(
+                    id = zoneId,
+                    region = "full",
+                    sound = oldZone?.sound,
+                    gain = oldZone?.gain ?: 1.0f
+                )
+            )
+            newDivider = targetDrum.divider
+        } else {
+            newModel = "split"
+            for (i in 0 until targetCount) {
+                val zoneId = "${drumId}-${i + 1}"
+                val oldZone = oldZoneMap[zoneId] ?: oldZonesList.getOrNull(i)
+                val region = if (targetCount == 2) {
+                    if (i == 0) "lower" else "upper"
+                } else {
+                    "sector"
+                }
+                newZones.add(
+                    com.vrkendang.kitcore.model.ZoneData(
+                        id = zoneId,
+                        region = region,
+                        band = if (targetCount > 2) i else null,
+                        sound = oldZone?.sound,
+                        gain = oldZone?.gain ?: 1.0f
+                    )
+                )
+            }
+            newDivider = targetDrum.divider ?: DividerData(angle = 0f)
+        }
+
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.id == drumId) {
+                drum.copy(
+                    model = newModel,
+                    divider = newDivider,
+                    zones = newZones
+                )
+            } else drum
+        }
+
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Mengatur sudut rotasi garis pembatas sekat juring kendang (0.0 s.d. 360.0 derajat).
+     */
+    fun updateDrumAngle(drumId: String, angle: Float): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val targetDrum = kit.drums.firstOrNull { it.id == drumId } ?: return kit
+
+        val clampedAngle = ((angle % 360f) + 360f) % 360f
+        val curDiv = targetDrum.divider ?: DividerData()
+        val updatedDiv = curDiv.copy(angle = clampedAngle)
+
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.id == drumId) {
+                drum.copy(divider = updatedDiv)
+            } else drum
+        }
+
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Menambahkan kendang baru dengan nama bebas dan jumlah zona awal (1..4 zona).
+     */
+    fun addDrum(name: String, initialZoneCount: Int = 1): Pair<KitData, com.vrkendang.kitcore.model.DrumData> {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+
+        var baseSlug = name.trim().lowercase().replace(Regex("[^a-z0-9]+"), "-").trim('-')
+        if (baseSlug.isBlank()) baseSlug = "drum"
+        if (baseSlug == "bass") baseSlug = "drum-baru"
+
+        var cleanId = baseSlug
+        var counter = 2
+        val existingIds = kit.drums.map { it.id }.toSet()
+        while (existingIds.contains(cleanId)) {
+            cleanId = "$baseSlug-$counter"
+            counter++
+        }
+
+        val targetCount = initialZoneCount.coerceIn(1, 4)
+        val model = if (targetCount == 1) "single" else "split"
+        val zones = if (targetCount == 1) {
+            listOf(
+                com.vrkendang.kitcore.model.ZoneData(
+                    id = "$cleanId-1",
+                    region = "full",
+                    sound = null,
+                    gain = 1.0f
+                )
+            )
+        } else {
+            (0 until targetCount).map { i ->
+                com.vrkendang.kitcore.model.ZoneData(
+                    id = "$cleanId-${i + 1}",
+                    region = if (targetCount == 2) (if (i == 0) "lower" else "upper") else "sector",
+                    band = if (targetCount > 2) i else null,
+                    sound = null,
+                    gain = 1.0f
+                )
+            }
+        }
+
+        val newDrum = com.vrkendang.kitcore.model.DrumData(
+            id = cleanId,
+            model = model,
+            center = Point(0.50f, 0.50f),
+            radius = Radius(0.16f, 0.16f),
+            divider = if (targetCount > 1) DividerData(angle = 0f) else null,
+            zones = zones
+        )
+
+        val updatedDrums = kit.drums + newDrum
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return Pair(updated, newDrum)
+    }
+
+    /**
+     * Menghapus kendang dari kit (Bass diproteksi agar tidak bisa dihapus).
+     */
+    fun deleteDrum(drumId: String): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        if (drumId == "bass") {
+            throw IllegalArgumentException("Kendang Bass tidak boleh dihapus")
+        }
+
+        val targetDrum = kit.drums.firstOrNull { it.id == drumId } ?: return kit
+        if (targetDrum.model == "bass") {
+            throw IllegalArgumentException("Kendang model Bass tidak boleh dihapus")
+        }
+
+        // Hapus file WAV zona kendang ini jika ada di folder kerja
+        for (z in targetDrum.zones) {
+            val wavFile = File(soundsDir, "${z.id}.wav")
+            if (wavFile.exists()) {
+                wavFile.delete()
+            }
+        }
+
+        val updatedDrums = kit.drums.filter { it.id != drumId }
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
      * Mengubah urutan array drums (dipertahankan pada level API sesi untuk kompatibilitas unit test).
      */
     fun moveDrumOrder(fromIndex: Int, toIndex: Int): KitData {

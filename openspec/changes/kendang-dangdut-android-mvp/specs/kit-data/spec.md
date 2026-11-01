@@ -51,7 +51,7 @@ Sistem SHALL menerapkan batas keamanan saat membaca paket `.vrkendang`: maksimum
 - **THEN** proses ekstraksi ditolak dengan pesan galat batas keamanan dan tidak ada file yang ditulis ke disk
 
 ### Requirement: Skema kit.json
-File `kit.json` SHALL mendeklarasikan struktur wajib: metadata kit (`formatVersion`, `kitId`, `name`, `version`, `canvasAspect`) dan array `drums[]` (memuat `id`, `model`, `center`, `radius`, `zones[]`, serta `divider` untuk model `bass`). Medan `sound` per zona dapat bernilai `null` atau path relatif. Urutan elemen array `drums` SHALL menentukan prioritas evaluasi hit-testing.
+File `kit.json` SHALL mendeklarasikan struktur wajib: metadata kit (`formatVersion`, `kitId`, `name`, `version`, `canvasAspect`) dan array `drums[]` (memuat `id`, `model`, `center`, `radius`, `zones[]`, serta `divider` opsional untuk pembatas Bass atau putaran sudut kendang radial). Medan `sound` per zona dapat bernilai `null` atau path relatif. Urutan elemen array `drums` SHALL menentukan prioritas evaluasi hit-testing.
 
 #### Scenario: Kit New Metro terurai menjadi 4 drum dan 10 zona sesuai prioritas array
 - **WHEN** file `kit.json` New Metro di-parse
@@ -69,18 +69,18 @@ Sistem SHALL memvalidasi identitas dan geometri `kit.json`: `formatVersion` dike
 - **THEN** validasi menolak kit dengan pesan galat rentang geometri tidak valid
 
 ### Requirement: Aturan validasi gain, divider, dan region kit.json
-Sistem SHALL memvalidasi `gain` di rentang 0.0–2.0; parameter `divider` model `bass` memiliki `dx` dan `dy` di rentang -3.0 sampai 3.0 serta `r` > 0 dan ≤ 3.0; dan region sesuai model (`bass`: `main` dan `crescent` dengan `band` 0–3 dan `divider` lengkap; `split`: `upper` dan `lower`; `single`: `full`).
+Sistem SHALL memvalidasi `gain` di rentang 0.0–2.0; parameter `divider` model `bass` memiliki `dx` dan `dy` di rentang -3.0 sampai 3.0 serta `r` > 0 dan ≤ 3.0; parameter `divider.angle` (jika ada) berada di rentang 0.0 sampai 360.0; dan region sesuai model (`bass`: `main` dan `crescent` dengan `band` 0–3 dan `divider` lengkap; `split`: 1–4 zona dengan region `upper`, `lower`, `sector`, atau `full`; `single`: 1 zona dengan region `full`).
 
 #### Scenario: Pelanggaran batas gain ditolak
 - **WHEN** suatu zona memiliki nilai `gain` di bawah 0.0 atau di atas 2.0
 - **THEN** validasi menolak kit dengan pesan galat gain di luar batas
 
 #### Scenario: Pelanggaran rentang parameter divider ditolak
-- **WHEN** drum model `bass` memiliki `divider.dx` atau `divider.dy` di luar -3.0 sampai 3.0, atau `divider.r` ≤ 0 atau > 3.0
+- **WHEN** drum model `bass` memiliki `divider.dx` atau `divider.dy` di luar -3.0 sampai 3.0, atau `divider.r` ≤ 0 atau > 3.0, atau `divider.angle` di luar 0.0..360.0
 - **THEN** validasi menolak kit dengan pesan galat rentang divider tidak valid
 
 #### Scenario: Pelanggaran region per model ditolak
-- **WHEN** drum model `bass` tidak menyertakan `divider`, memiliki `band` di luar 0–3, atau region bukan `main` dan `crescent`; drum model `split` mendeklarasikan region selain `upper` atau `lower`; atau drum model `single` bukan `full`
+- **WHEN** drum model `bass` tidak menyertakan `divider`, memiliki `band` di luar 0–3, atau region bukan `main` dan `crescent`; drum model `split` memiliki > 4 zona atau region tidak sah; atau drum model `single` bukan `full`
 - **THEN** validasi menolak kit dengan pesan galat struktur region model tidak sesuai
 
 ### Requirement: Daftar kit bawaan

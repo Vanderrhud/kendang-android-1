@@ -118,7 +118,12 @@ Rumus:
   - Area utama (Bass-1): di dalam oval Bass DAN di dalam lingkaran pembatas `C_div`.
   - Area bulan sabit (Bass-2 hingga Bass-5): di dalam oval Bass DAN di luar `C_div`; posisi `Y` membagi rentang vertikal oval Bass menjadi 4 bilah sama tinggi (`band` 0-3, dari atas ke bawah).
   - `C_div` didefinisikan **relatif terhadap radius Bass**: pusat `(cx + dx·rx, cy + dy·ry)` dan radius `r·rx`. Dengan begitu busur ikut berskala saat Bass diperbesar atau diperkecil.
-- **Model `split` (Sedang, Kecil 2):** dalam oval, bandingkan `Y` dengan `cy`: `upper` bila `Y < cy`, `lower` bila sebaliknya (`Y >= cy`, termasuk `Y == cy`). Pemetaan zona: Sedang-1 = `lower`, Sedang-2 = `upper`; Kecil2-1 = `lower`, Kecil2-2 = `upper`.
+- **Model `split` (Sedang, Kecil 2, dan kendang baru):**
+  - Jika 2 zona default tanpa rotasi: `upper` bila `Y < cy`, `lower` bila sebaliknya (`Y >= cy`, termasuk `Y == cy`). Pemetaan zona: Sedang-1 = `lower`, Sedang-2 = `upper`; Kecil2-1 = `lower`, Kecil2-2 = `upper`.
+  - Jika dirotasi atau memiliki 3–4 zona: pembagian juring radial ($180^\circ$ untuk 2 zona, $120^\circ$ untuk 3 zona, $90^\circ$ untuk 4 zona) dengan parameter rotasi sudut $\phi$ (`divider.angle`, $0^\circ - 360^\circ$):
+    - $\theta = (\text{atan2}((Y - cy)/ry, (X - cx)/rx) \times \frac{180}{\pi} + 360^\circ) \pmod{360^\circ}$
+    - $\theta_{\text{rel}} = (\theta - \phi + 360^\circ) \pmod{360^\circ}$
+    - $\text{zoneIndex} = \lfloor \theta_{\text{rel}} / (360^\circ / N) \rfloor$
 - **Model `single` (Kecil 1):** dalam oval, langsung zona tunggal (Kecil1-1).
 
 **Urutan evaluasi:** mengikuti urutan elemen array `drums` di `kit.json` (indeks kecil dicek lebih dulu). Untuk New Metro: Bass → Kecil 1 → Sedang → Kecil 2. Bila tidak ada yang cocok, sentuhan diabaikan.

@@ -221,16 +221,24 @@ Layout override pemain SHALL tidak diterapkan pada salinan kerja di Mode Develop
 - **WHEN** developer mengubah tata letak di Mode Developer lalu menyimpan kit
 - **THEN** perubahan ditulis ke `kit.json` salinan kerja dan file `.vrkendang`, dan layout override pemain tidak diubah
 
-### Requirement: Cakupan penyuntingan struktur kit di MVP
-Struktur kit SHALL tetap 4 kendang dari template pada MVP (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`). Developer SHALL dapat mengubah nama kit (saat menyimpan sebagai kit baru), `center`, radius (`rx`, `ry`), parameter divider Bass, serta sound dan gain tiap zona. Kontrol urutan prioritas array `drums` serta aksi menambah atau menghapus kendang dan zona tidak ditampilkan di UI Mode Developer MVP.
+### Requirement: Cakupan penyuntingan struktur kit dan fleksibilitas kendang
+Struktur kit SHALL mendukung penambahan kendang baru dan penghapusan kendang (kecuali Bass yang diproteksi tidak boleh dihapus). Developer SHALL dapat mengubah nama kit, posisi, radius, jumlah zona (Bass: 1–5 zona; kendang non-bass: 1–4 zona), parameter divider Bass, parameter putaran sudut rotasi ($0^\circ - 360^\circ$) pada kendang non-bass dengan $\ge 2$ zona, serta sound dan gain tiap zona.
 
-#### Scenario: Developer mengubah properti yang termasuk cakupan MVP
-- **WHEN** developer mengubah nama kit, posisi, radius, divider Bass, atau sound/gain zona
-- **THEN** perubahan diterapkan pada salinan kerja, dapat disimpan secara internal (`✓ Simpan` / `+ Kit Baru`), dan dapat diekspor ke paket `.vrkendang` (`Ekspor`)
+#### Scenario: Developer menambah kendang baru
+- **WHEN** developer menekan tombol `+ Kendang`, memasukkan nama kendang dan memilih jumlah zona awal (1–4 zona)
+- **THEN** kendang baru ditambahkan ke kit dengan ID unik dan model yang sesuai (`single` untuk 1 zona, `split` untuk 2–4 zona), langsung dapat diatur dan dimainkan
 
-#### Scenario: Menambah atau menghapus kendang/zona tidak tersedia di MVP
-- **WHEN** developer mencari aksi untuk menambah atau menghapus kendang/zona di Mode Developer MVP
-- **THEN** tidak ada aksi tersebut; jumlah kendang dan zona tetap mengikuti template
+#### Scenario: Developer menghapus kendang non-bass
+- **WHEN** developer memilih kendang selain Bass lalu menekan `Hapus Kendang` dan mengonfirmasi dialog
+- **THEN** kendang beserta seluruh zonanya dan file WAV terkait dihapus dari kit, dan seleksi berpindah ke Bass
+
+#### Scenario: Menghapus kendang Bass ditolak
+- **WHEN** developer mencoba menghapus kendang Bass
+- **THEN** tombol hapus tidak tersedia untuk Bass dan operasi penghapusan ditolak
+
+#### Scenario: Developer mengatur jumlah zona dan putaran sudut kendang non-bass
+- **WHEN** developer memilih jumlah zona (1–4) pada kendang non-bass dan menggeser slider putaran sudut ($0^\circ - 360^\circ$)
+- **THEN** kendang menyesuaikan jumlah zona juring radialnya dan garis pembatas sekat berputar secara real-time pada papan pratinjau
 
 ### Requirement: Semua perubahan salinan kerja tetap valid
 Setiap perubahan pada salinan kerja SHALL menghasilkan `kit.json` yang lolos `KitValidator`. Kontrol (slider, input) SHALL membatasi nilai sesuai aturan validasi (gain 0.0–2.0, batas skala dan posisi sama dengan `calibration-mode`), dan perubahan yang tidak valid SHALL ditolak dengan pesan yang jelas.
