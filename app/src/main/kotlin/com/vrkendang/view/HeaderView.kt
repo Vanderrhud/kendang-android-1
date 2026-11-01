@@ -87,8 +87,7 @@ class HeaderView @JvmOverloads constructor(
             }
             setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
             setOnClickListener {
-                val isExpanded = childMenuContainer.visibility == View.VISIBLE
-                setChildMenuExpanded(!isExpanded)
+                toggleChildMenu()
             }
         }
         leftRow.addView(
@@ -249,6 +248,11 @@ class HeaderView @JvmOverloads constructor(
      */
     fun setChildMenuExpanded(expanded: Boolean) {
         childMenuContainer.visibility = if (expanded) View.VISIBLE else View.GONE
+    }
+
+    private fun toggleChildMenu() {
+        val isExpanded = childMenuContainer.visibility == View.VISIBLE
+        setChildMenuExpanded(!isExpanded)
     }
 
     /**
