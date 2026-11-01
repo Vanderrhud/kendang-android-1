@@ -20,26 +20,27 @@ Belum ada aplikasi kendang dangdut Android yang membagi satu kulit kendang menja
 - Siklus hidup audio: saat stream dijeda (pause) ketika ke background, semua voice aktif dihentikan agar tidak ada bunyi menggantung saat resume; reconnect otomatis saat headphone dicolok/dicabut.
 
 **Tampilan dan interaksi**
-- `KendangBoardView`: satu Custom View yang merender seluruh kendang dan menangani semua multi-touch secara terpusat.
+- `KendangBoardView`: satu Custom View yang merender seluruh kendang pada layar penuh landscape dan menangani semua multi-touch secara terpusat.
 - Hit-testing berbasis matematika murni (aljabar), dapat diuji unit test di CI. Sentuhan zona (dengan atau tanpa suara) menampilkan visual tap highlight.
-- Daftar kit di aplikasi: pemain memilih dari kit yang tersedia (MVP: satu kit awal New Metro; arsitektur sudah mendukung banyak kit).
+- Navigasi berbasis halaman penuh (tanpa dialog popup): Header di sisi kiri menyediakan satu tombol Parent (`☰ Menu`) yang membuka opsi Child **`Pilih Kit`** (membuka Halaman Pilih Kit full layar dengan nama kit dan tombol **`Pakai`** / status **`Aktif`**) dan **`Sesuaikan`** (membuka halaman/mode penyesuaian posisi & ukuran kendang); di sisi kanan Header tersedia tombol **`Mode Developer`** (khusus build debug).
 - `FLAG_KEEP_SCREEN_ON`, Immersive Sticky Mode, orientasi landscape terkunci.
 
 **Data kit**
-- Format `kit.json` modular dan data-driven (skema pada bagian "Skema `kit.json` dan paket `.vrkendang`" di design.md): kanvas relatif, posisi dan ukuran tiap kendang, parameter busur pembatas Bass, nama file suara (boleh null bila belum dipasang, seperti kit baru yang awalnya kosong), dan `gain` (volume) per zona (rentang 0.0–2.0).
+- Format `kit.json` modular dan data-driven (skema pada bagian "Skema `kit.json` dan paket `.vrkendang`" di design.md): kanvas relatif, posisi dan ukuran tiap kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`), parameter busur pembatas Bass, nama file suara (boleh null bila belum dipasang, seperti kit baru yang awalnya kosong), dan `gain` (volume) per zona (rentang 0.0–2.0).
 - Validasi ketat di `:kit-core`: bila `sound` tidak null, file harus ada, bukan path absolut, tidak mengandung `..`, dan berformat WAV PCM 16-bit mono valid.
 - Kit awal bawaan (`new-metro`) membawa konfigurasi tata letak dan zona di `assets/kits/new-metro/kit.json` tanpa menyertakan aset WAV bawaan di dalam APK.
 - Format paket kit satu file berekstensi **`.vrkendang`** (zip berisi `kit.json` dan `sounds/*.wav`) untuk ekspor/impor oleh developer.
 
-**Mode pemain: edit tata letak (Mode Kalibrasi)**
-- Pemain dapat menggeser posisi dan mengubah ukuran kendang langsung di layar; suara tidak dapat diubah.
-- Tombol simpan menyimpan tata letak pemain sebagai *layout override* kecil per kit di penyimpanan internal aplikasi. Kit yang dimuat adalah kit bawaan yang digabung dengan override tersebut. Tersedia tombol "Reset ke bawaan".
+**Mode pemain: sesuaikan tata letak (Mode Kalibrasi)**
+- Pemain dapat menggeser posisi kendang dengan 1 jari dan mencubit dengan 2 jari (*pinch-to-scale*) langsung di kanvas penuh untuk memperbesar/memperkecil ukuran kendang (tanpa bar atau slider bawah yang menghalangi layar); suara tidak dapat diubah.
+- Header mode Sesuaikan hanya menyediakan tombol **`✕ Batal`**, **`↺ Reset`**, dan **`✓ Simpan`**. Tombol Simpan menyimpan tata letak pemain sebagai *layout override* kecil per kit di penyimpanan internal aplikasi.
 
 **Mode developer (krusial untuk pengujian internal, hanya di build debug)**
-- Mode developer memberi kendali penuh dan menjadi instrumen utama developer untuk menguji aplikasi: membuat kit baru (seluruh zona awalnya tanpa suara), mengubah posisi, ukuran, parameter busur Bass, volume per zona, serta memasang dan mengganti file suara per zona langsung dari penyimpanan HP.
+- Mode developer dibuka sebagai halaman penuh mandiri dan menggunakan pola pemilihan per kendang: developer mengetuk salah satu kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`) di peta kiri, lalu panel kanan menampilkan konfigurasi khusus kendang tersebut (daftar zona suara WAV, tes bunyi, volume/gain per zona, serta parameter busur pembatas khusus untuk `Bass`).
 - Alur kerja suara dari HP: developer memilih file audio berformat **WAV PCM 16-bit mono** via Android System File Picker (`ACTION_OPEN_DOCUMENT`), disalin ke direktori kerja aplikasi, diurai oleh `WavParser`, langsung di-load ke C++ engine, dan bisa langsung dimainkan serta diuji seketika.
-- Ekspor/impor: kit yang telah disempurnakan dapat disimpan/diekspor menjadi paket file tunggal `.vrkendang` ke penyimpanan HP; "Simpan" menimpa file sumber lewat URI berizin persisten, sedangkan "Simpan Sebagai" selalu membuat file baru.
-- Kit bawaan dapat dibuka di mode developer sebagai salinan kerja; menyimpannya menghasilkan file `.vrkendang` (kit di dalam APK tidak pernah ditimpa).
+- Pemisahan tegas antara **Simpan Internal** vs **Ekspor/Impor (`.vrkendang`)**:
+  - **Simpan (Internal)**: Menyimpan hasil edit langsung ke penyimpanan internal aplikasi (`files/kits/<kitId>/`) sehingga langsung muncul dan dapat diaktifkan di halaman **Pilih Kit** tanpa membuka File Manager HP. Tersedia 2 opsi simpan internal: **`✓ Simpan`** (menimpa kit yang sedang diedit saat ini) dan **`+ Kit Baru`** (menyimpan hasil edit menjadi kit baru dengan nama dan ID baru).
+  - **Impor & Ekspor (`.vrkendang`)**: Tombol terpisah khusus untuk mengimpor paket `.vrkendang` dari penyimpanan HP atau mengekspor kit ke file `.vrkendang` di penyimpanan HP.
 - Kode mode developer berada di source set `debug`; APK release tidak membawa kode ini. Tidak ada cadangan otomatis (`.bak`) saat menimpa file kit.
 - Impor kit melakukan validasi ketat (struktur `kit.json`, keberadaan dan format WAV PCM 16-bit mono, rentang nilai) serta perlindungan path traversal saat mengekstrak zip.
 

@@ -63,12 +63,12 @@ class FileLayoutOverrideSource(
 }
 
 /**
- * Repositori kit bawaan dari `assets/kits/`.
+ * Repositori kit dari `assets/kits/` dan penyimpanan internal `filesDir/kits/`.
  *
  * Tanggung jawab:
- * - Mendaftar seluruh kit bawaan yang lolos [KitValidator].
+ * - Mendaftar seluruh kit yang lolos [KitValidator].
  * - Melewati kit rusak/invalid dan mencatat alasannya ke log.
- * - Menolak `kitId` duplikat (kit pertama dalam urutan nama folder menang).
+ * - Menolak `kitId` duplikat antar aset, serta mengutamakan versi tersimpan di `internalKitsDir` bila developer menyimpan perubahan atas kit bawaan.
  * - Tidak memunculkan direktori kerja developer (`dev-kit`) di daftar pemain.
  * - Menerapkan layout override pemain melalui [LayoutMerger].
  * - Menyediakan fallback ke kit sebelumnya atau `new-metro` bila kit yang
@@ -77,7 +77,8 @@ class FileLayoutOverrideSource(
 class KitRepository(
     private val assetSource: KitAssetSource,
     private val layoutOverrideSource: LayoutOverrideSource = LayoutOverrideSource { null },
-    private val logSink: (String) -> Unit = { message -> Log.e(TAG, message) }
+    private val logSink: (String) -> Unit = { message -> Log.e(TAG, message) },
+    private val internalKitsDir: File? = null
 ) {
 
     companion object {
@@ -102,19 +103,49 @@ class KitRepository(
     val activeKit: KitData? get() = activeKitId?.let { id -> cachedKits.firstOrNull { it.kitId == id } }
 
     /**
-     * Memindai ulang `assets/kits/` dan mengembalikan kit valid yang sudah
-     * digabung dengan layout override pemain.
+     * Memindai ulang `internalKitsDir` (jika ada) dan `assets/kits/`, lalu mengembalikan
+     * kit valid yang sudah digabung dengan layout override pemain.
      */
     fun loadKits(): List<KitData> {
+        val kits = mutableListOf<KitData>()
+        val seenKitIds = mutableSetOf<String>()
+        val internalKitIds = mutableSetOf<String>()
+
+        // 1. Muat kit yang tersimpan di penyimpanan internal aplikasi (filesDir/kits/<kitId>/)
+        if (internalKitsDir != null && internalKitsDir.isDirectory) {
+            val internalFolders = internalKitsDir.listFiles()
+                ?.filter { it.isDirectory && it.name != DEV_KIT_DIR_NAME }
+                ?.sortedBy { it.name }
+                ?: emptyList()
+
+            for (dir in internalFolders) {
+                val kitFile = File(dir, KIT_JSON)
+                if (!kitFile.isFile) continue
+                val baseKit = try {
+                    KitJsonParser.parse(kitFile.readText())
+                } catch (e: Exception) {
+                    logSink("Kit internal '${dir.name}' dilewati: gagal mengurai kit.json — ${e.message}")
+                    continue
+                }
+                val validationErrors = KitValidator.validate(baseKit)
+                if (validationErrors.isNotEmpty()) {
+                    logSink("Kit internal '${dir.name}' dilewati: validasi gagal — ${validationErrors.joinToString("; ")}")
+                    continue
+                }
+                if (seenKitIds.add(baseKit.kitId)) {
+                    internalKitIds.add(baseKit.kitId)
+                    kits.add(applyPlayerLayoutOverride(baseKit))
+                }
+            }
+        }
+
+        // 2. Muat kit bawaan dari assets/kits/
         val folderNames = try {
             assetSource.list(KITS_ASSET_ROOT).sorted()
         } catch (e: Exception) {
             logSink("Gagal membaca daftar '$KITS_ASSET_ROOT': ${e.message}")
             emptyList<String>()
         }
-
-        val kits = mutableListOf<KitData>()
-        val seenKitIds = mutableSetOf<String>()
 
         for (folderName in folderNames) {
             if (folderName == DEV_KIT_DIR_NAME) {
@@ -138,6 +169,11 @@ class KitRepository(
                     "Kit '$folderName' dilewati: validasi gagal — " +
                         validationErrors.joinToString("; ")
                 )
+                continue
+            }
+
+            if (baseKit.kitId in internalKitIds) {
+                // Kit ini sudah memiliki versi simpanan terbaru di internalKitsDir
                 continue
             }
 
@@ -171,10 +207,22 @@ class KitRepository(
     }
 
     /**
-     * Membaca kit dasar bawaan dari aset tanpa penerapan layout override pemain.
-     * Digunakan sebagai referensi posisi dan radius dasar saat kalibrasi tata letak.
+     * Membaca kit dasar tanpa penerapan layout override pemain.
+     * Mengutamakan versi di `internalKitsDir` bila ada, lalu `assets/kits/`.
      */
     fun getBaseKit(kitId: String): KitData? {
+        if (internalKitsDir != null && internalKitsDir.isDirectory) {
+            val internalFile = File(File(internalKitsDir, kitId), KIT_JSON)
+            if (internalFile.isFile) {
+                try {
+                    val parsed = KitJsonParser.parse(internalFile.readText())
+                    if (parsed.kitId == kitId && KitValidator.validate(parsed).isEmpty()) {
+                        return parsed
+                    }
+                } catch (_: Exception) {}
+            }
+        }
+
         val folderNames = try {
             assetSource.list(KITS_ASSET_ROOT)
         } catch (_: Exception) {
@@ -194,6 +242,20 @@ class KitRepository(
             }
         }
         return null
+    }
+
+    /**
+     * Membuka stream file suara milik [kitId] pada [relativePath] (misal `sounds/bass-1.wav`).
+     * Mengutamakan file di `internalKitsDir` bila ada, lalu jatuh ke `assets/kits/`.
+     */
+    fun openSoundStream(kitId: String, relativePath: String): InputStream {
+        if (internalKitsDir != null) {
+            val internalSound = File(File(internalKitsDir, kitId), relativePath)
+            if (internalSound.isFile) {
+                return internalSound.inputStream()
+            }
+        }
+        return assetSource.open("$KITS_ASSET_ROOT/$kitId/$relativePath")
     }
 
     /**
@@ -227,7 +289,7 @@ class KitRepository(
     }
 
     /**
-     * Menggabungkan layout override pemain ke kit bawaan.
+     * Menggabungkan layout override pemain ke kit dasar.
      *
      * Override yang rusak atau menghasilkan kit tidak valid diabaikan agar
      * tata letak bawaan tetap aman dipakai.

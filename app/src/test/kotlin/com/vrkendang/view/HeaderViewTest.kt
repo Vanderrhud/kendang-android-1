@@ -48,4 +48,16 @@ class HeaderViewTest {
         val items = SettingsMenuProviderImpl.getMenuItems()
         assertTrue(items.any { it.id == "edit_layout" && it.title == "Edit Tata Letak" })
     }
+
+    @Test
+    fun testParentMenuTogglesChildMenuOptions() {
+        val context = RuntimeEnvironment.getApplication()
+        val headerView = HeaderView(context)
+
+        assertEquals(View.GONE, headerView.childMenuContainer.visibility)
+        headerView.menuButton.performClick()
+        assertEquals(View.VISIBLE, headerView.childMenuContainer.visibility)
+        assertEquals("Pilih Kit", headerView.pilihKitButton.text.toString())
+        assertEquals("Sesuaikan", headerView.settingsButton.text.toString())
+    }
 }

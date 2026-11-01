@@ -7,7 +7,6 @@ import com.vrkendang.audio.AudioEngineApi
 import com.vrkendang.audio.AudioEngineApiImpl
 import com.vrkendang.kitcore.factory.KitFactory
 import com.vrkendang.kitcore.model.DividerData
-import com.vrkendang.kitcore.model.DrumData
 import com.vrkendang.kitcore.model.KitData
 import com.vrkendang.kitcore.model.Point
 import com.vrkendang.kitcore.model.Radius
@@ -25,16 +24,14 @@ import java.io.InputStream
  * Pengelola sesi Mode Developer untuk penyusunan kit (Tahap 11).
  *
  * Mengimplementasikan:
- * - Pembuatan kit baru dari template (Task 11.1)
- * - Pembukaan paket .vrkendang dan kit bawaan ke filesDir/dev-kit/ (Task 11.1, 11.7)
+ * - Pembukaan kit aktif dari penyimpanan internal (`filesDir/kits/<kitId>/`) atau kit bawaan APK ke `filesDir/dev-kit/`
+ * - Simpan langsung menimpa kit aktif di dalam aplikasi (`✓ Simpan` -> `filesDir/kits/<kitId>/`) tanpa pemilih file HP (Task 11.5)
+ * - Simpan sebagai Kit Baru di dalam aplikasi (`+ Kit Baru` -> `filesDir/kits/<newKitId>/`) tanpa pemilih file HP (Task 11.5)
+ * - Impor dan Ekspor paket ZIP `.vrkendang` secara terpisah via SAF (Task 11.6)
  * - Mode UJI dan EDIT (Task 11.2)
- * - Kontrol edit zona, gain 0.0–2.0, pasang/kosongkan WAV (Task 11.3)
+ * - Kontrol edit zona per kendang, gain 0.0–2.0, pasang/kosongkan WAV (Task 11.3)
  * - Parameter divider Bass (dx/dy -3.0..3.0, r 0..3.0) (Task 11.4)
- * - Simpan atomik ke file sumber dan Simpan Sebagai (Task 11.5, 11.6)
- * - Indikator dan pelacakan perubahan belum disimpan (Task 11.8)
- * - Pemuatan sampel aman tanpa gangguan audio stream (Task 11.9)
- * - Batasan 4 kendang template tanpa tambah/hapus (Task 11.10)
- * - Kontrol pengubahan urutan array drums / prioritas hit-test (Task 11.11)
+ * - Indikator dan pelacakan perubahan belum disimpan (Task 11.7)
  */
 class DevKitAuthoringSession(
     val devKitDir: File,
@@ -83,11 +80,45 @@ class DevKitAuthoringSession(
     }
 
     /**
-     * Membuat kit baru dari template bawaan (Task 11.1).
+     * Membuka kit aktif (dari `internalKitsDir` bila sudah pernah disimpan, atau dari `assets/kits/` APK)
+     * ke dalam `devKitDir` sebagai salinan kerja.
+     */
+    fun openActiveKitAsWorkingCopy(
+        kitId: String,
+        internalKitsDir: File,
+        assetManager: AssetManager
+    ): KitData {
+        val savedDir = File(internalKitsDir, kitId)
+        val savedJsonFile = File(savedDir, "kit.json")
+        if (savedJsonFile.isFile) {
+            val kit = KitJsonParser.parse(savedJsonFile.readText())
+            soundsDir.deleteRecursively()
+            soundsDir.mkdirs()
+
+            val savedSoundsDir = File(savedDir, "sounds")
+            if (savedSoundsDir.isDirectory) {
+                savedSoundsDir.listFiles()?.forEach { wavFile ->
+                    if (wavFile.isFile) {
+                        wavFile.copyTo(File(soundsDir, wavFile.name), overwrite = true)
+                    }
+                }
+            }
+
+            writeKitJsonToDisk(kit)
+            workingKit = kit
+            sourceUri = null
+            hasUnsavedChanges = false
+            return kit
+        }
+        return openBuiltInKit(kitId, assetManager)
+    }
+
+    /**
+     * Membuat kit baru dari template bawaan (Task 11.1 / kompatibilitas unit test).
      *
      * @param kitId ID kit baru (hanya huruf kecil, angka, tanda hubung; dilarang sama dengan "new-metro").
      * @param name Nama tampilan kit baru.
-     * @param targetUri URI berkas sumber .vrkendang yang dipilih oleh developer.
+     * @param targetUri URI berkas sumber .vrkendang opsional.
      */
     fun createNewKit(kitId: String, name: String, targetUri: Uri?): KitData {
         val newKit = KitFactory.createFromTemplate(kitId, name)
@@ -101,7 +132,7 @@ class DevKitAuthoringSession(
 
         workingKit = newKit
         sourceUri = targetUri
-        hasUnsavedChanges = (targetUri == null) // jika belum ada URI target, tandai dirty
+        hasUnsavedChanges = (targetUri == null)
         return newKit
     }
 
@@ -129,13 +160,103 @@ class DevKitAuthoringSession(
 
         writeKitJsonToDisk(kit)
         workingKit = kit
-        sourceUri = null // kit bawaan tidak memiliki file sumber .vrkendang
+        sourceUri = null
         hasUnsavedChanges = false
         return kit
     }
 
     /**
-     * Membuka file paket .vrkendang dari URI penyimpanan (Task 11.7).
+     * Menyimpan perubahan kit saat ini secara langsung menimpa kit di penyimpanan internal aplikasi
+     * (`filesDir/kits/<kitId>/` dan `filesDir/dev-kit/`) tanpa membuka file picker HP (Task 11.5).
+     */
+    fun saveCurrentEditToInternalStorage(internalKitsDir: File): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val updatedKit = kit.copy(version = kit.version + 1)
+        KitValidator.validateOrThrow(updatedKit)
+
+        writeKitJsonToDisk(updatedKit)
+        copyWorkingKitToInternalDir(updatedKit, internalKitsDir)
+
+        workingKit = updatedKit
+        hasUnsavedChanges = false
+        return updatedKit
+    }
+
+    /**
+     * Menyimpan konfigurasi yang sedang diedit menjadi Kit Baru di penyimpanan internal aplikasi
+     * (`filesDir/kits/<newKitId>/`) dengan nama baru dan menyalin sampel suara aktif (Task 11.5).
+     */
+    fun saveAsNewInternalKit(
+        newKitId: String,
+        newName: String,
+        internalKitsDir: File
+    ): KitData {
+        val current = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val trimmedId = newKitId.trim()
+        val trimmedName = newName.trim()
+
+        // Validasi format ID dan nama menggunakan KitFactory (menolak duplikasi 'new-metro' atau ID tidak valid)
+        KitFactory.createFromTemplate(trimmedId, trimmedName)
+
+        val newKit = current.copy(
+            kitId = trimmedId,
+            name = trimmedName,
+            version = 1
+        )
+        KitValidator.validateOrThrow(newKit)
+
+        writeKitJsonToDisk(newKit)
+        copyWorkingKitToInternalDir(newKit, internalKitsDir)
+
+        workingKit = newKit
+        sourceUri = null
+        hasUnsavedChanges = false
+        return newKit
+    }
+
+    private fun copyWorkingKitToInternalDir(kit: KitData, internalKitsDir: File) {
+        val targetDir = File(internalKitsDir, kit.kitId)
+        val targetSoundsDir = File(targetDir, "sounds")
+        if (!targetSoundsDir.exists()) targetSoundsDir.mkdirs()
+
+        // Bersihkan WAV yatim di folder tujuan yang tidak lagi dirujuk oleh kit.json
+        val referencedFileNames = kit.drums
+            .flatMap { it.zones }
+            .mapNotNull { it.sound?.substringAfterLast('/') }
+            .toSet()
+
+        targetSoundsDir.listFiles()?.forEach { existing ->
+            if (existing.name !in referencedFileNames) {
+                existing.delete()
+            }
+        }
+
+        // Salin WAV yang dirujuk dari devKitDir ke filesDir/kits/<kitId>/sounds/
+        for (drum in kit.drums) {
+            for (zone in drum.zones) {
+                val relPath = zone.sound ?: continue
+                val srcFile = File(devKitDir, relPath)
+                val dstFile = File(targetDir, relPath)
+                if (srcFile.isFile) {
+                    dstFile.parentFile?.mkdirs()
+                    srcFile.copyTo(dstFile, overwrite = true)
+                }
+            }
+        }
+
+        // Tulis kit.json secara atomik ke filesDir/kits/<kitId>/kit.json
+        val targetJson = File(targetDir, "kit.json")
+        val tmpJson = File(targetDir, "kit.json.tmp")
+        val jsonText = json.encodeToString(KitData.serializer(), kit)
+        tmpJson.writeText(jsonText)
+        if (!tmpJson.renameTo(targetJson)) {
+            targetJson.writeText(jsonText)
+            tmpJson.delete()
+        }
+    }
+
+    /**
+     * Mengimpor file paket .vrkendang dari URI penyimpanan HP (Task 11.6).
      *
      * Mengekstrak ke direktori sementara, memvalidasi integritas,
      * lalu baru menggantikan salinan kerja di filesDir/dev-kit/.
@@ -170,7 +291,7 @@ class DevKitAuthoringSession(
     }
 
     /**
-     * Memperbarui nama kit (Task 11.10).
+     * Memperbarui nama kit.
      */
     fun updateKitName(newName: String): KitData {
         val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
@@ -182,7 +303,7 @@ class DevKitAuthoringSession(
     }
 
     /**
-     * Mengubah posisi center kendang (Task 11.2).
+     * Mengubah posisi center kendang.
      */
     fun updateDrumCenter(drumId: String, newCenter: Point): KitData {
         val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
@@ -197,7 +318,7 @@ class DevKitAuthoringSession(
     }
 
     /**
-     * Mengubah ukuran radius kendang (rx, ry) (Task 11.2).
+     * Mengubah ukuran radius kendang (rx, ry).
      */
     fun updateDrumRadius(drumId: String, newRadius: Radius): KitData {
         val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
@@ -261,10 +382,7 @@ class DevKitAuthoringSession(
     }
 
     /**
-     * Mengubah urutan array drums (prioritas hit-test) (Task 11.11).
-     *
-     * @param fromIndex Indeks asal kendang yang ingin digeser.
-     * @param toIndex Indeks target (misal naik atau turun satu posisi).
+     * Mengubah urutan array drums (dipertahankan pada level API sesi untuk kompatibilitas unit test).
      */
     fun moveDrumOrder(fromIndex: Int, toIndex: Int): KitData {
         val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
@@ -313,7 +431,7 @@ class DevKitAuthoringSession(
     }
 
     /**
-     * Menyimpan kit ke paket .vrkendang (Task 11.5 & 11.6).
+     * Mengekspor kit ke paket .vrkendang (Task 11.6).
      *
      * Alur:
      * 1. Naikkan nilai version tepat 1 tingkat.

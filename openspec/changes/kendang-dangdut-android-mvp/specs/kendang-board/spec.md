@@ -143,12 +143,20 @@ Setiap sentuhan yang berhasil mendeteksi zona akustik pada mode bermain SHALL me
 - **WHEN** zona tanpa suara (`sound: null`) terdeteksi saat ketukan
 - **THEN** event dilewati tanpa mengirim trigger audio ke C++
 
-### Requirement: Header tampilan dan pemilihan kit
-Tampilan utama Activity SHALL memiliki Header di bagian atas dengan tinggi tetap 48dp berisi tombol pemilih kit di sisi kiri, slot iklan di tengah (tersembunyi pada MVP), dan tombol pengaturan di sisi kanan. Memilih kit dari dialog pemilih kit SHALL memuat kit tersebut dan menggambar ulang seluruh papan kendang.
+### Requirement: Header navigasi Parent-Child dan Halaman Pilih Kit layar penuh
+Tampilan utama Activity SHALL memiliki Header di bagian atas (~44–48dp) dengan pola menu Parent-Child di sisi kiri (`☰ Menu` disertai label `Kit: <Nama>`), slot iklan di tengah (tersembunyi pada MVP), dan tombol `Mode Developer` di sisi kanan (khusus build debug). Mengetuk tombol parent `☰ Menu` SHALL menampilkan dua opsi child: `Pilih Kit` (membuka Halaman Pilih Kit layar penuh) dan `Sesuaikan` (membuka Halaman Sesuaikan layar penuh). Pada Halaman Pilih Kit layar penuh, setiap baris kit SHALL hanya menampilkan nama kit di sisi kiri dan status `Aktif` atau tombol `Pakai` di sisi kanan (tanpa istilah teknis developer seperti "Kit Bawaan", "Kit Tersimpan", atau jumlah file suara), dan hanya 1 kit yang dapat berstatus `Aktif`.
 
-#### Scenario: Memilih kit menggambar ulang papan kendang
-- **WHEN** pengguna memilih kit dari dialog daftar kit
-- **THEN** data kit dimuat dan papan kendang digambar ulang sesuai konfigurasi kit yang baru dipilih
+#### Scenario: Menu Parent membuka opsi Pilih Kit dan Sesuaikan
+- **WHEN** pemain mengetuk tombol `☰ Menu` di pojok kiri atas
+- **THEN** aplikasi menampilkan opsi child `Pilih Kit` dan `Sesuaikan`
+
+#### Scenario: Halaman Pilih Kit menampilkan nama kit dan tombol Pakai
+- **WHEN** pemain membuka `Pilih Kit` dari menu
+- **THEN** tampil halaman penuh berisi daftar nama kit; kit yang sedang digunakan menampilkan badge `Aktif` dan kit lainnya menampilkan tombol `Pakai`
+
+#### Scenario: Menekan tombol Pakai mengaktifkan kit dan menggambar ulang papan
+- **WHEN** pemain menekan tombol `Pakai` pada salah satu kit di Halaman Pilih Kit
+- **THEN** kit tersebut menjadi satu-satunya kit `Aktif`, data kit dimuat, dan papan kendang digambar ulang sesuai konfigurasi kit yang baru dipilih
 
 ### Requirement: Orientasi layar terkunci landscape dan mode Immersive Sticky
 Aplikasi SHALL selalu berjalan dalam orientasi landscape dan menggunakan mode Immersive Sticky: bar sistem tersembunyi secara default; bila bar muncul sementara akibat swipe dari tepi layar, sistem SHALL otomatis menyembunyikannya kembali; serta sentuhan biasa di dekat tepi layar SHALL tidak memunculkan bar sistem.

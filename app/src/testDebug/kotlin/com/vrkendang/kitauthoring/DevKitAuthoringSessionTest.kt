@@ -151,4 +151,34 @@ class DevKitAuthoringSessionTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun testSaveCurrentEditAndSaveAsNewInternalKit() {
+        val tempDevDir = File.createTempFile("dev-session-internal", "").apply { delete(); mkdirs() }
+        val tempInternalKitsDir = File.createTempFile("internal-kits-dir", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDevDir)
+            session.createNewKit("kit-awal", "Kit Awal", null)
+            session.updateZoneGain("bass-1", 1.4f)
+            assertTrue(session.hasUnsavedChanges)
+
+            // 1. Simpan menimpa kit saat ini di penyimpanan internal aplikasi
+            val savedCurrent = session.saveCurrentEditToInternalStorage(tempInternalKitsDir)
+            assertEquals("kit-awal", savedCurrent.kitId)
+            assertEquals(2, savedCurrent.version)
+            assertFalse(session.hasUnsavedChanges)
+            assertTrue(File(tempInternalKitsDir, "kit-awal/kit.json").isFile)
+
+            // 2. Simpan menjadi kit baru di penyimpanan internal aplikasi
+            val savedNew = session.saveAsNewInternalKit("kit-baru-koplo", "Kit Baru Koplo", tempInternalKitsDir)
+            assertEquals("kit-baru-koplo", savedNew.kitId)
+            assertEquals("Kit Baru Koplo", savedNew.name)
+            assertEquals(1, savedNew.version)
+            assertFalse(session.hasUnsavedChanges)
+            assertTrue(File(tempInternalKitsDir, "kit-baru-koplo/kit.json").isFile)
+        } finally {
+            tempDevDir.deleteRecursively()
+            tempInternalKitsDir.deleteRecursively()
+        }
+    }
 }

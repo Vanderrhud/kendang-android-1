@@ -14,11 +14,9 @@ import android.view.WindowInsetsController
 import android.view.WindowManager
 import android.widget.Button
 import android.widget.LinearLayout
-import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import com.vrkendang.kitcore.layout.LayoutMerger
-import com.vrkendang.kitcore.model.DrumData
 import com.vrkendang.kitcore.model.DrumOverride
 import com.vrkendang.kitcore.model.KitData
 import com.vrkendang.kitcore.model.LayoutOverride
@@ -30,16 +28,16 @@ import com.vrkendang.repository.KitRepository
 import com.vrkendang.view.KendangBoardView
 import com.vrkendang.view.LayoutOverrideStorage
 import java.io.File
-import kotlin.math.roundToInt
 
 /**
- * Halaman khusus layar penuh untuk Mode Kalibrasi Tata Letak Pemain (Tahap 10).
+ * Halaman Sesuaikan Layar Penuh untuk Pemain (Tahap 10 — Geser 1 Jari & Cubit 2 Jari).
  *
- * Dipisahkan menjadi halaman mandiri (bukan overlay yang menumpuk di atas layar bermain)
- * dengan struktur 3 baris tidak saling menutupi:
- * - Baris atas: Navigasi Kembali, judul kit aktif, Reset ke Bawaan, dan Simpan.
- * - Baris tengah: Kanvas [KendangBoardView] dalam mode [KendangBoardView.BoardMode.EDIT_LAYOUT].
- * - Baris bawah: Tombol pemilih cepat kendang dan slider ukuran adaptif (0.50x–1.50x).
+ * Sesuai Desain Penpot ("3. Halaman Sesuaikan (Geser & Cubit)") & Spesifikasi Calibration Mode:
+ * - Hanya untuk mengatur posisi dan ukuran 4 kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`).
+ * - Bebas dari panel bawah atau slider penutup kanvas.
+ * - Geser 1 jari memindahkan posisi kendang terpilih.
+ * - Cubit 2 jari mengubah ukuran kendang terpilih secara proporsional (0.5x–1.5x) di dalam batas kanvas.
+ * - Header atas: "✕ Batal" (kiri), petunjuk singkat di tengah, serta "↺ Reset" dan "✓ Simpan" (kanan).
  */
 class CalibrationActivity : Activity() {
 
@@ -49,9 +47,6 @@ class CalibrationActivity : Activity() {
 
     private lateinit var storage: LayoutOverrideStorage
     private lateinit var boardView: KendangBoardView
-    private lateinit var scaleSeekBar: SeekBar
-    private lateinit var scaleValueText: TextView
-    private val drumButtons = mutableMapOf<String, Button>()
 
     private var baseKit: KitData? = null
     private var workingKit: KitData? = null
@@ -69,10 +64,12 @@ class CalibrationActivity : Activity() {
         }
 
         val layoutsDir = File(filesDir, "layouts")
+        val internalKitsDir = File(filesDir, "kits")
         storage = LayoutOverrideStorage(layoutsDir)
         val kitRepository = KitRepository(
-            AssetManagerKitAssetSource(assets),
-            FileLayoutOverrideSource(layoutsDir)
+            assetSource = AssetManagerKitAssetSource(assets),
+            layoutOverrideSource = FileLayoutOverrideSource(layoutsDir),
+            internalKitsDir = internalKitsDir
         )
 
         val kitId = intent?.getStringExtra(EXTRA_KIT_ID) ?: KitRepository.DEFAULT_KIT_ID
@@ -109,50 +106,52 @@ class CalibrationActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#121212"))
+            setBackgroundColor(Color.parseColor("#141210"))
         }
 
-        // 1. Bilah Navigasi Atas (Header Halaman Kalibrasi)
+        // 1. Bilah Navigasi Atas (Header Halaman Sesuaikan sesuai Desain Penpot)
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.parseColor("#1C1917"))
+            setBackgroundColor(Color.parseColor("#1A1715"))
             setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
         }
 
-        val backBtn = createActionButton("← Kembali", "#332E2A") {
+        val cancelBtn = createActionButton("✕ Batal", "#2A2622", "#443D36") {
             handleExitRequest()
         }
-        topBar.addView(backBtn)
+        topBar.addView(cancelBtn)
 
-        val titleText = TextView(this).apply {
-            text = "  📐 Edit Tata Letak — ${activeKit.name}"
-            textSize = 14f
-            setTextColor(Color.WHITE)
+        val hintText = TextView(this).apply {
+            text = "Sesuaikan: Geser kendang untuk pindah posisi • Cubit 2 jari untuk ubah ukuran"
+            textSize = 12f
+            setTextColor(Color.parseColor("#FFD54F"))
+            gravity = Gravity.CENTER
             paint.isFakeBoldText = true
+            setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
         }
-        topBar.addView(titleText)
+        topBar.addView(hintText)
 
-        val resetBtn = createActionButton("↺ Reset Bawaan", "#4E342E") {
+        val resetBtn = createActionButton("↺ Reset", "#3E2723", "#8D6E63") {
             promptResetToDefault()
         }
         topBar.addView(resetBtn)
 
-        val saveBtn = createActionButton("💾 Simpan Tata Letak", "#2E7D32") {
+        val saveBtn = createActionButton("✓ Simpan", "#2E7D32", "#66BB6A") {
             saveLayoutOverride()
         }
         topBar.addView(saveBtn)
 
         root.addView(
             topBar,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (48 * density).toInt())
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (46 * density).toInt())
         )
 
-        // 2. Kanvas Papan Kendang di Tengah (Bebas Tumpukan)
+        // 2. Kanvas Papan Kendang Penuh (Tanpa bilah bawah / slider penutup)
         boardView = KendangBoardView(this).apply {
             mode = KendangBoardView.BoardMode.EDIT_LAYOUT
-            showZoneGuides = true
+            showZoneGuides = false
             kit = activeKit
             onDrumSelectedListener = { drum ->
                 selectDrum(drum.id)
@@ -160,89 +159,43 @@ class CalibrationActivity : Activity() {
             onDrumMovedListener = { drumId, newCenter ->
                 onDrumMoved(drumId, newCenter)
             }
+            onDrumPinchScaleListener = { drumId, scaleFactor ->
+                onDrumPinchScaled(drumId, scaleFactor)
+            }
         }
         root.addView(
             boardView,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f)
         )
 
-        // 3. Bilah Kontrol Bawah (Pilih Kendang + Slider Ukuran Adaptif)
-        val bottomBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.parseColor("#1C1917"))
-            setPadding((12 * density).toInt(), (6 * density).toInt(), (12 * density).toInt(), (6 * density).toInt())
-        }
-
-        val selectLabel = TextView(this).apply {
-            text = "Pilih Kendang: "
-            textSize = 12f
-            setTextColor(Color.LTGRAY)
-        }
-        bottomBar.addView(selectLabel)
-
-        drumButtons.clear()
-        for (drum in activeKit.drums) {
-            val btn = createActionButton(drum.id.uppercase(), "#2B2622") {
-                selectDrum(drum.id)
-            }
-            drumButtons[drum.id] = btn
-            bottomBar.addView(btn)
-        }
-
-        val scaleLabel = TextView(this).apply {
-            text = "   Ukuran:"
-            textSize = 12f
-            setTextColor(Color.LTGRAY)
-        }
-        bottomBar.addView(scaleLabel)
-
-        scaleSeekBar = SeekBar(this).apply {
-            max = 100
-            progress = 50
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
-                marginStart = (8 * density).toInt()
-                marginEnd = (8 * density).toInt()
-            }
-        }
-        bottomBar.addView(scaleSeekBar)
-
-        scaleValueText = TextView(this).apply {
-            text = "1.00x"
-            textSize = 13f
-            setTextColor(Color.CYAN)
-            paint.isFakeBoldText = true
-        }
-        bottomBar.addView(scaleValueText)
-
-        root.addView(
-            bottomBar,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (52 * density).toInt())
-        )
-
-        setupSeekBarListener()
         return root
     }
 
-    private fun createActionButton(label: String, hexColor: String, onClick: () -> Unit): Button {
+    private fun createActionButton(
+        label: String,
+        bgHex: String,
+        strokeHex: String,
+        onClick: () -> Unit
+    ): Button {
         val density = resources.displayMetrics.density
         return Button(this).apply {
             text = label
             textSize = 11.5f
             setTextColor(Color.WHITE)
             isAllCaps = false
+            paint.isFakeBoldText = true
             background = GradientDrawable().apply {
-                setColor(Color.parseColor(hexColor))
+                setColor(Color.parseColor(bgHex))
                 cornerRadius = 8f * density
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#55FFFFFF"))
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(strokeHex))
             }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                (34 * density).toInt()
+                (32 * density).toInt()
             ).apply {
                 marginEnd = (6 * density).toInt()
             }
-            setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
+            setPadding((14 * density).toInt(), 0, (14 * density).toInt(), 0)
             setOnClickListener { onClick() }
         }
     }
@@ -250,92 +203,6 @@ class CalibrationActivity : Activity() {
     private fun selectDrum(drumId: String) {
         selectedDrumId = drumId
         boardView.selectedDrumId = drumId
-
-        val density = resources.displayMetrics.density
-        for ((id, btn) in drumButtons) {
-            val isSelected = id == drumId
-            btn.background = GradientDrawable().apply {
-                setColor(Color.parseColor(if (isSelected) "#FF8F00" else "#2B2622"))
-                cornerRadius = 8f * density
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(if (isSelected) "#FFD54F" else "#55FFFFFF"))
-            }
-            btn.setTextColor(if (isSelected) Color.BLACK else Color.WHITE)
-        }
-
-        val currentWorking = workingKit ?: return
-        val drum = currentWorking.drums.firstOrNull { it.id == drumId } ?: return
-        updateSliderForSelectedDrum(drum)
-    }
-
-    private fun updateSliderForSelectedDrum(drum: DrumData) {
-        val base = baseKit ?: return
-        val currentWorking = workingKit ?: return
-        val baseDrum = base.drums.firstOrNull { it.id == drum.id } ?: return
-
-        val maxAdaptive = LayoutMerger.calculateMaxAdaptiveScale(
-            center = drum.center,
-            radius = baseDrum.radius,
-            canvasAspect = currentWorking.canvasAspect
-        )
-
-        val effectiveMax = minOf(LayoutMerger.MAX_SCALE, maxAdaptive)
-        val currentScale = scalesByDrumId[drum.id] ?: 1.0f
-        val clampedScale = currentScale.coerceIn(LayoutMerger.MIN_SCALE, effectiveMax)
-
-        scalesByDrumId[drum.id] = clampedScale
-        val progressVal = ((clampedScale - LayoutMerger.MIN_SCALE) * 100f).roundToInt()
-        val maxProgressVal = ((effectiveMax - LayoutMerger.MIN_SCALE) * 100f).roundToInt().coerceAtLeast(1)
-
-        scaleSeekBar.max = maxProgressVal
-        scaleSeekBar.progress = progressVal
-        scaleValueText.text = String.format("%.2fx", clampedScale)
-    }
-
-    private fun setupSeekBarListener() {
-        scaleSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                if (!fromUser) return
-                val currentWorking = workingKit ?: return
-                val base = baseKit ?: return
-                val baseDrum = base.drums.firstOrNull { it.id == selectedDrumId } ?: return
-                val currentDrum = currentWorking.drums.firstOrNull { it.id == selectedDrumId } ?: return
-
-                val newScale = LayoutMerger.MIN_SCALE + (progress / 100f)
-                val maxAdaptive = LayoutMerger.calculateMaxAdaptiveScale(
-                    center = currentDrum.center,
-                    radius = baseDrum.radius,
-                    canvasAspect = currentWorking.canvasAspect
-                )
-                val finalScale = newScale.coerceIn(LayoutMerger.MIN_SCALE, minOf(LayoutMerger.MAX_SCALE, maxAdaptive))
-
-                scalesByDrumId[selectedDrumId] = finalScale
-                scaleValueText.text = String.format("%.2fx", finalScale)
-
-                val clampedCenter = LayoutMerger.clampCenter(
-                    center = currentDrum.center,
-                    radius = baseDrum.radius,
-                    canvasAspect = currentWorking.canvasAspect,
-                    scale = finalScale
-                )
-
-                val updatedDrums = currentWorking.drums.map { d ->
-                    if (d.id == selectedDrumId) {
-                        d.copy(
-                            center = clampedCenter,
-                            radius = Radius(baseDrum.radius.rx * finalScale, baseDrum.radius.ry * finalScale)
-                        )
-                    } else d
-                }
-
-                val updatedKit = currentWorking.copy(drums = updatedDrums)
-                workingKit = updatedKit
-                boardView.kit = updatedKit
-                hasUnsavedChanges = true
-            }
-
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
     }
 
     private fun onDrumMoved(drumId: String, newCenter: Point) {
@@ -347,9 +214,49 @@ class CalibrationActivity : Activity() {
         workingKit = updatedKit
         boardView.kit = updatedKit
         hasUnsavedChanges = true
+    }
 
-        val movedDrum = updatedDrums.firstOrNull { it.id == drumId } ?: return
-        updateSliderForSelectedDrum(movedDrum)
+    private fun onDrumPinchScaled(drumId: String, scaleFactor: Float) {
+        val currentWorking = workingKit ?: return
+        val base = baseKit ?: return
+        val baseDrum = base.drums.firstOrNull { it.id == drumId } ?: return
+        val currentDrum = currentWorking.drums.firstOrNull { it.id == drumId } ?: return
+
+        val previousScale = scalesByDrumId[drumId] ?: 1.0f
+        val proposedScale = previousScale * scaleFactor
+
+        val maxAdaptive = LayoutMerger.calculateMaxAdaptiveScale(
+            center = currentDrum.center,
+            radius = baseDrum.radius,
+            canvasAspect = currentWorking.canvasAspect
+        )
+        val finalScale = proposedScale.coerceIn(
+            LayoutMerger.MIN_SCALE,
+            minOf(LayoutMerger.MAX_SCALE, maxAdaptive)
+        )
+
+        scalesByDrumId[drumId] = finalScale
+
+        val clampedCenter = LayoutMerger.clampCenter(
+            center = currentDrum.center,
+            radius = baseDrum.radius,
+            canvasAspect = currentWorking.canvasAspect,
+            scale = finalScale
+        )
+
+        val updatedDrums = currentWorking.drums.map { d ->
+            if (d.id == drumId) {
+                d.copy(
+                    center = clampedCenter,
+                    radius = Radius(baseDrum.radius.rx * finalScale, baseDrum.radius.ry * finalScale)
+                )
+            } else d
+        }
+
+        val updatedKit = currentWorking.copy(drums = updatedDrums)
+        workingKit = updatedKit
+        boardView.kit = updatedKit
+        hasUnsavedChanges = true
     }
 
     private fun saveLayoutOverride() {
@@ -368,12 +275,12 @@ class CalibrationActivity : Activity() {
 
         if (storage.saveAtomic(override)) {
             hasUnsavedChanges = false
-            Toast.makeText(this, "✓ Tata letak berhasil disimpan", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "✓ Tata letak disimpan", Toast.LENGTH_SHORT).show()
             finish()
         } else {
             AlertDialog.Builder(this)
                 .setTitle("Gagal Menyimpan")
-                .setMessage("Terjadi kendala saat menyimpan berkas tata letak. Perubahan Anda tetap ada di layar ini.")
+                .setMessage("Terjadi kendala saat menyimpan tata letak. Perubahan Anda tetap ada di layar ini.")
                 .setPositiveButton("OK", null)
                 .show()
         }
@@ -406,7 +313,7 @@ class CalibrationActivity : Activity() {
         if (hasUnsavedChanges) {
             AlertDialog.Builder(this)
                 .setTitle("Perubahan Belum Disimpan")
-                .setMessage("Simpan perubahan posisi dan ukuran kendang sebelum kembali ke layar bermain?")
+                .setMessage("Simpan perubahan posisi dan ukuran kendang sebelum kembali?")
                 .setPositiveButton("Simpan") { _, _ ->
                     saveLayoutOverride()
                 }

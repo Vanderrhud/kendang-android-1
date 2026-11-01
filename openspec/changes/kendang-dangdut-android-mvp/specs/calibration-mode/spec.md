@@ -6,12 +6,12 @@ Memungkinkan pemain untuk mengatur posisi dan ukuran kendang langsung di layar p
 
 ## ADDED Requirements
 
-### Requirement: Mode kalibrasi dapat diaktifkan dari tombol Pengaturan
-Mode kalibrasi (edit tata letak) SHALL dapat diakses melalui tombol Pengaturan (⚙) di header yang tersedia di semua build. Saat mode kalibrasi aktif, tombol pemilih kit SHALL dinonaktifkan dan perubahan hanya berlaku untuk kit yang sedang aktif.
+### Requirement: Halaman Sesuaikan dapat diaktifkan dari menu utama
+Mode kalibrasi tata letak pemain (`Halaman Sesuaikan`) SHALL dapat diakses melalui tombol `☰ Menu` → `Sesuaikan` di header utama yang tersedia di semua build. Saat Halaman Sesuaikan aktif, perubahan posisi dan ukuran hanya berlaku untuk kit yang sedang aktif.
 
-#### Scenario: Pemain membuka mode kalibrasi dari menu
-- **WHEN** pemain membuka menu dari tombol Pengaturan dan memilih "Edit Tata Letak"
-- **THEN** layar beralih ke mode kalibrasi, kontrol tata letak ditampilkan, dan tombol pemilih kit dinonaktifkan
+#### Scenario: Pemain membuka Halaman Sesuaikan dari menu
+- **WHEN** pemain membuka `☰ Menu` di pojok kiri atas dan memilih `Sesuaikan`
+- **THEN** layar beralih ke Halaman Sesuaikan layar penuh dengan header `✕ Batal`, petunjuk singkat di tengah, serta tombol `↺ Reset` dan `✓ Simpan` di kanan
 
 ### Requirement: Pemilihan kendang di mode kalibrasi
 Pemain SHALL dapat memilih kendang dengan mengetuknya; kendang terpilih SHALL diberi tanda visual pembeda. Menggeser kendang SHALL secara otomatis memilih kendang tersebut. Bila sentuhan mengenai area tumpang tindih antara dua kendang, kendang yang berada lebih awal di array `drums` pada `kit.json` yang terpilih. Sentuhan di luar semua kendang SHALL tidak mengubah kendang yang sedang dipilih.
@@ -39,16 +39,16 @@ Pemain SHALL dapat menggeser kendang terpilih menggunakan satu jari. Jari tambah
 - **WHEN** pemain meletakkan jari kedua di layar saat jari pertama sedang menggeser kendang
 - **THEN** jari kedua diabaikan dan gerakan kendang tetap dikendalikan oleh jari pertama
 
-### Requirement: Ubah ukuran kendang dengan slider adaptif
-Sistem SHALL menyediakan slider ukuran dengan rentang dasar 0.5x–1.5x. Batas skala maksimum pada slider SHALL disesuaikan secara dinamis untuk kendang yang dipilih agar ukuran efektif kendang tidak melampaui batas kanvas dan selalu lolos validasi `KitValidator` (merujuk bagian "Layout override pemain (posisi dan ukuran saja)" di `design.md`).
+### Requirement: Ubah ukuran kendang dengan gestur cubit dua jari (pinch-to-scale)
+Sistem SHALL memungkinkan pemain mengubah ukuran kendang terpilih secara langsung menggunakan gestur cubit dua jari (`ScaleGestureDetector`) di rentang skala `0.5x–1.5x` tanpa menampilkan bilah bawah atau slider yang menutupi papan. Batas skala maksimum SHALL dijepit secara dinamis agar ukuran efektif kendang tidak melampaui batas kanvas dan selalu lolos validasi `KitValidator` (merujuk bagian "Layout override pemain di Halaman Sesuaikan" di `design.md`).
 
-#### Scenario: Slider menyesuaikan batas maksimum di dekat tepi kanvas
-- **WHEN** kendang yang dipilih berada dekat dengan batas kanvas sehingga skala 1.5x akan melewati tepi kanvas
-- **THEN** batas maksimum slider secara otomatis dibatasi sebelum 1.5x sehingga oval kendang tetap di dalam kanvas
+#### Scenario: Gestur cubit dua jari mengubah ukuran kendang secara proporsional
+- **WHEN** pemain mencubit atau merentangkan dua jari pada papan saat suatu kendang terpilih di Halaman Sesuaikan
+- **THEN** nilai `rx` dan `ry` kendang tersebut berubah proporsional secara real-time di layar dalam rentang `0.5x–1.5x`
 
-#### Scenario: Slider mengubah ukuran kendang secara proporsional
-- **WHEN** pemain menggeser slider ukuran kendang
-- **THEN** nilai `rx` dan `ry` kendang berubah proporsional secara real-time di layar
+#### Scenario: Skala maksimum dijepit otomatis di dekat tepi kanvas
+- **WHEN** kendang yang dipilih berada dekat dengan batas kanvas sehingga skala `1.5x` akan melewati tepi kanvas
+- **THEN** batas skala maksimum secara otomatis dijepit sebelum `1.5x` sehingga oval kendang tetap berada di dalam kanvas
 
 ### Requirement: Tanpa suara di mode kalibrasi
 Seluruh interaksi sentuhan di mode kalibrasi SHALL tidak membunyikan suara audio dan SHALL tidak mengirimkan event ke antrean audio engine (sesuai spesifikasi `kendang-board`).
@@ -97,12 +97,12 @@ Opsi "Reset ke Bawaan" SHALL meminta konfirmasi terlebih dahulu kepada pemain. S
 - **WHEN** pemain memilih "Reset ke Bawaan" dan menyetujui dialog konfirmasi
 - **THEN** file override dihapus, semua kendang kembali ke posisi dan ukuran default bawaan `kit.json`, dan pemain tetap di mode kalibrasi
 
-### Requirement: Tata letak kontrol kalibrasi yang ringkas
-Kontrol antarmuka mode kalibrasi (slider skala, tombol Simpan, Batal, dan Reset) SHALL dirancang ringkas agar tidak menutupi area bermain kendang secara permanen pada layar landscape sempit.
+### Requirement: Tata letak Halaman Sesuaikan bebas panel bawah
+Antarmuka Halaman Sesuaikan SHALL hanya menempatkan tombol aksi (`✕ Batal`, `↺ Reset`, `✓ Simpan`) dan teks petunjuk singkat pada bar header atas, tanpa bilah bawah atau slider di atas kanvas, sehingga seluruh area bermain kendang terlihat utuh dan bebas halangan.
 
-#### Scenario: Kontrol kalibrasi tidak menghalangi kendang
-- **WHEN** mode kalibrasi aktif di layar landscape
-- **THEN** kontrol penyesuaian ditempatkan secara ergonomis dan seluruh kendang tetap terlihat jelas oleh pemain
+#### Scenario: Seluruh area kendang bebas dari panel penutup
+- **WHEN** Halaman Sesuaikan aktif di layar landscape
+- **THEN** tidak ada panel bawah atau slider yang menutupi kanvas, dan keempat kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`) terlihat penuh
 
 ### Requirement: Batas independensi dengan Mode Developer
 Layout override pemain SHALL tidak diterapkan pada salinan kerja kit di Mode Developer. Penyuntingan tata letak di Mode Developer adalah pengubahan paket kit mandiri yang diatur oleh spesifikasi `kit-authoring`. Semua perubahan tata letak di Mode Developer SHALL ditulis ke `kit.json` di salinan kerja dan ke file `.vrkendang` saat disimpan, bukan ke `files/layouts/<kitId>.json`.

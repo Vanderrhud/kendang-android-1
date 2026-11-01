@@ -122,6 +122,9 @@ class KendangBoardView @JvmOverloads constructor(
     /** Callback saat posisi kendang digeser pada mode edit tata letak. */
     var onDrumMovedListener: ((drumId: String, newCenter: Point) -> Unit)? = null
 
+    /** Callback saat ukuran kendang dicubit 2 jari (pinch-to-scale) pada mode edit tata letak (Task 10.3). */
+    var onDrumPinchScaleListener: ((drumId: String, scaleFactor: Float) -> Unit)? = null
+
     /** Overlay garis batas zona untuk kebutuhan kalibrasi (Task 7.5). */
     val zoneGuideOverlay: ZoneGuideOverlay = ZoneGuideOverlayProvider.create()
 
@@ -146,9 +149,11 @@ class KendangBoardView @JvmOverloads constructor(
         )
     }
 
-    // Status drag pada mode EDIT_LAYOUT
+    // Status drag & pinch 2 jari pada mode EDIT_LAYOUT
     private var activePointerId: Int = MotionEvent.INVALID_POINTER_ID
     private var isDragging: Boolean = false
+    private var isPinching: Boolean = false
+    private var pinchLastSpanPx: Float = 0f
     private var dragStartCenter: Point = Point(0f, 0f)
     private var dragTouchStart: Point = Point(0f, 0f)
 
@@ -480,8 +485,15 @@ class KendangBoardView @JvmOverloads constructor(
 
             // Gambar label nama kendang di atas rim jika di mode EDIT_LAYOUT
             if (mode == BoardMode.EDIT_LAYOUT) {
+                val displayName = when (drum.id) {
+                    "bass" -> "Bass"
+                    "kecil1" -> "Kecil 1"
+                    "sedang" -> "Sedang"
+                    "kecil2" -> "Kecil 2"
+                    else -> drum.id
+                }
                 canvas.drawText(
-                    drum.id.uppercase(),
+                    displayName,
                     cx,
                     (cy - ry - 8f * density).coerceAtLeast(16f * density),
                     drumTitlePaint
@@ -737,13 +749,13 @@ class KendangBoardView @JvmOverloads constructor(
     }
 
     /**
-     * Memproses sentuhan pada mode edit tata letak (Task 7.6).
+     * Memproses sentuhan pada mode edit tata letak (Task 7.6, 10.2, 10.3).
      *
      * Aturan:
      * - Nol pemanggilan ke AudioEngine (hening total).
      * - Mengetuk kendang memilih kendang (mempertahankan pilihan jika ketuk di luar).
-     * - Menggeser kendang dengan satu jari (jari tambahan diabaikan).
-     * - Posisi dijepit real-time ke batas kanvas melalui [LayoutMerger.clampCenter].
+     * - Menggeser kendang dengan satu jari memindahkan posisi kendang (dijepit real-time ke batas kanvas).
+     * - Mencubit dengan dua jari mengubah ukuran kendang terpilih secara proporsional.
      */
     private fun handleEditLayoutTouchEvent(event: MotionEvent, currentKit: KitData): Boolean {
         val action = event.actionMasked
@@ -752,6 +764,7 @@ class KendangBoardView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 val touchX = event.x
                 val touchY = event.y
+                isPinching = false
 
                 if (mapper.isInsideCanvas(touchX, touchY)) {
                     val canvasPt = mapper.toCanvasCoordinates(touchX, touchY)
@@ -761,7 +774,7 @@ class KendangBoardView @JvmOverloads constructor(
                             selectedDrumId = hit.drum.id
                             onDrumSelectedListener?.invoke(hit.drum)
 
-                            // Mulai sesi drag dengan jari ini
+                            // Mulai sesi drag dengan jari pertama
                             activePointerId = event.getPointerId(0)
                             isDragging = true
                             dragStartCenter = hit.drum.center
@@ -771,8 +784,29 @@ class KendangBoardView @JvmOverloads constructor(
                 }
             }
 
+            MotionEvent.ACTION_POINTER_DOWN -> {
+                if (event.pointerCount >= 2 && onDrumPinchScaleListener != null) {
+                    // Beralih ke gestur cubit 2 jari untuk mengubah ukuran kendang terpilih
+                    isDragging = false
+                    isPinching = true
+                    if (selectedDrumId == null) {
+                        selectedDrumId = currentKit.drums.firstOrNull()?.id
+                    }
+                    pinchLastSpanPx = computeTwoFingerSpan(event)
+                }
+            }
+
             MotionEvent.ACTION_MOVE -> {
-                if (isDragging && activePointerId != MotionEvent.INVALID_POINTER_ID) {
+                if (isPinching && event.pointerCount >= 2 && onDrumPinchScaleListener != null) {
+                    val currentSpan = computeTwoFingerSpan(event)
+                    val targetDrumId = selectedDrumId
+                    if (targetDrumId != null && pinchLastSpanPx > 10f && currentSpan > 10f) {
+                        val scaleFactor = (currentSpan / pinchLastSpanPx).coerceIn(0.85f, 1.15f)
+                        pinchLastSpanPx = currentSpan
+                        onDrumPinchScaleListener?.invoke(targetDrumId, scaleFactor)
+                        invalidate()
+                    }
+                } else if (isDragging && activePointerId != MotionEvent.INVALID_POINTER_ID && event.pointerCount == 1) {
                     val pointerIndex = event.findPointerIndex(activePointerId)
                     if (pointerIndex >= 0) {
                         val currentX = event.getX(pointerIndex)
@@ -806,16 +840,28 @@ class KendangBoardView @JvmOverloads constructor(
                 }
             }
 
-            MotionEvent.ACTION_POINTER_DOWN -> {
-                // Sesuai requirement: jari tambahan selama penggeseran diabaikan
+            MotionEvent.ACTION_POINTER_UP -> {
+                if (event.pointerCount <= 2) {
+                    isPinching = false
+                    pinchLastSpanPx = 0f
+                }
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 isDragging = false
+                isPinching = false
+                pinchLastSpanPx = 0f
                 activePointerId = MotionEvent.INVALID_POINTER_ID
             }
         }
 
         return true
+    }
+
+    private fun computeTwoFingerSpan(event: MotionEvent): Float {
+        if (event.pointerCount < 2) return 0f
+        val dx = event.getX(1) - event.getX(0)
+        val dy = event.getY(1) - event.getY(0)
+        return sqrt(dx * dx + dy * dy)
     }
 }

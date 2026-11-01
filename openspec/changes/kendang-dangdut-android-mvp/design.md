@@ -91,17 +91,19 @@ VR Kendang adalah aplikasi Android baru dari nol yang difokuskan sebagai instrum
 
 ---
 
-### D6: Tata letak utama, ConstraintLayout dua zona
+### D6: Tata letak utama & navigasi halaman penuh (Parent-Child Menu)
 
-**Keputusan:** Layout Activity memakai `ConstraintLayout`: `HeaderView` di atas (tinggi tetap ~48dp) dan `KendangBoardView` di bawahnya mengisi sisa tinggi.
+**Keputusan:** Layout utama menggunakan layar penuh landscape (`ConstraintLayout` / `LinearLayout`): `HeaderView` ramping di bagian atas (~44–48dp) dan `KendangBoardView` di bawahnya mengisi seluruh lebar dan sisa tinggi layar tanpa kotak batas sempit di tengah. Seluruh fitur dibuka sebagai halaman penuh mandiri (tanpa dialog *popup*).
 
 ```
-Activity (ConstraintLayout, landscape-locked, Immersive Sticky)
-├── HeaderView (height: 48dp, top: 0)
-│   ├── KitSelectorButton (start)  -> membuka daftar kit
+MainActivity (landscape-locked, Immersive Sticky, Full Screen)
+├── HeaderView (top bar)
+│   ├── MenuButton (start, Parent: "☰ Menu") + Label Kit Aktif
+│   │   ├── Child 1: "Pilih Kit"  -> membuka Halaman Pilih Kit (Full Layar: Nama Kit + Status "Aktif" / Tombol "Pakai")
+│   │   └── Child 2: "Sesuaikan"  -> membuka Halaman Sesuaikan (Full Layar: Geser 1 jari & Cubit 2 jari)
 │   ├── AdSlotContainer (center, GONE di MVP)
-│   └── SettingsButton (end)       -> Edit Tata Letak; di build debug: Mode Developer (Alat Penyusun Kit)
-└── KendangBoardView (top: bottom_of_header, bottom: 0, match_parent width)
+│   └── DevModeButton (end, hanya build debug: "Mode Developer") -> membuka Halaman Mode Developer (Full Layar)
+└── KendangBoardView (mengisi penuh area bermain di bawah header)
 ```
 
 ---
@@ -130,11 +132,12 @@ Rumus:
 | Data | Lokasi | Akses |
 |---|---|---|
 | Kit bawaan | `assets/kits/<kitId>/` di APK (`kit.json` dan `sounds/` bila ada) | hanya baca (konfigurasi tata letak awal) |
-| Layout override pemain | penyimpanan internal aplikasi, `files/layouts/<kitId>.json` | baca/tulis oleh aplikasi |
+| Kit tersimpan internal | `filesDir/kits/<kitId>/` di penyimpanan internal aplikasi (`kit.json` dan `sounds/`) | baca oleh daftar kit pemain; tulis oleh Mode Developer (`Simpan` / `+ Kit Baru`) |
+| Layout override pemain | penyimpanan internal aplikasi, `files/layouts/<kitId>.json` | baca/tulis oleh Halaman Sesuaikan pemain |
 | Salinan kerja developer | `filesDir/dev-kit/` (direktori kerja kit yang sedang disunting) | hanya build debug |
-| File suara WAV & `.vrkendang` developer | dipilih lewat Storage Access Framework (`ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT`) | hanya build debug |
+| File suara WAV & `.vrkendang` developer | dipilih lewat Storage Access Framework (`ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT`) | hanya build debug (tombol `Pilih WAV`, `Impor`, dan `Ekspor`) |
 
-**Alasan:** Bebas izin runtime penyimpanan kompleks (`READ/WRITE_EXTERNAL_STORAGE` atau `MANAGE_EXTERNAL_STORAGE`), mematuhi arsitektur modern Android, dan memberikan akses langsung ke file audio yang dimiliki pengguna di memori HP. Salinan kerja disimpan di `filesDir/dev-kit/` (bukan `cacheDir`) agar tidak dibersihkan sistem saat penyimpanan menipis.
+**Alasan:** Memisahkan penyimpanan kerja internal aplikasi (`Simpan` dan `+ Kit Baru` di dalam aplikasi ke `filesDir/kits/<kitId>/`) dari aksi distribusi file ZIP `.vrkendang` ke memori HP (`Impor` dan `Ekspor` via SAF), bebas izin runtime penyimpanan kompleks (`READ/WRITE_EXTERNAL_STORAGE` atau `MANAGE_EXTERNAL_STORAGE`), serta memberikan alur penyuntingan yang cepat tanpa berulang kali membuka *file picker* sistem.
 
 ---
 
@@ -246,9 +249,14 @@ Paket hanya memuat file WAV yang dirujuk oleh `kit.json`, dengan nama `sounds/<z
 
 ---
 
-### D11: Layout override pemain (posisi dan ukuran saja)
+### D11: Layout override pemain di Halaman Sesuaikan (geser 1 jari dan cubit 2 jari)
 
-**Keputusan:** Edit tata letak pemain tidak menyalin file audio. Aplikasi menyimpan file kecil per kit di `files/layouts/<kitId>.json`:
+**Keputusan:** Halaman Sesuaikan (`Sesuaikan` dari menu `☰ Menu`) dikhususkan murni untuk pemain mengatur posisi dan ukuran 4 kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`) secara langsung di atas kanvas tanpa bilah bawah atau slider yang menutupi kendang:
+- **Geser 1 jari** memindahkan posisi kendang terpilih.
+- **Cubit 2 jari (`ScaleGestureDetector`)** mengubah skala ukuran kendang terpilih secara proporsional di rentang `0.5x–1.5x`.
+- Header bagian atas hanya memuat `✕ Batal` (kiri), petunjuk ringkas di tengah (`"Sesuaikan: Geser kendang untuk pindah posisi • Cubit 2 jari untuk ubah ukuran"`), serta `↺ Reset` dan `✓ Simpan` (kanan).
+
+Edit tata letak pemain tidak menyalin file audio. Aplikasi menyimpan file kecil per kit di `files/layouts/<kitId>.json`:
 
 ```json
 {
@@ -265,25 +273,31 @@ Saat kit dimuat, `LayoutOverride.apply(kit, override)` (di `:kit-core`) menghasi
 - ID kendang yang tidak dikenal dalam file override diabaikan.
 - File override yang rusak atau tidak dapat dibaca diabaikan sehingga tata letak bawaan tetap dipakai tanpa crash.
 - Penulisan override dilakukan secara atomik (tulis ke file sementara `.tmp` lalu ganti nama) untuk mencegah kerusakan berkas bila penulisan terputus.
-- Kit efektif hasil penggabungan harus tetap lolos validasi `KitValidator`. Tombol "Reset ke bawaan" meminta konfirmasi sebelum menghapus file override.
-- Layout override pemain tidak diterapkan pada salinan kerja di Mode Developer (Mode Developer menyunting kit asli secara independen). Perubahan tata letak Mode Developer ditulis ke `kit.json` salinan kerja dan file `.vrkendang`, bukan ke `files/layouts/<kitId>.json`.
+- Kit efektif hasil penggabungan harus tetap lolos validasi `KitValidator`. Tombol `↺ Reset` meminta konfirmasi sebelum menghapus file override.
+- Layout override pemain tidak diterapkan pada salinan kerja di Mode Developer (Mode Developer menyunting kit secara independen).
 
 ---
 
-### D12: Alat penyusun kit hanya di build debug
+### D12: Alat penyusun kit (Mode Developer) hanya di build debug — Konfigurasi per Kendang
 
-**Keputusan:** UI dan logika Mode Developer berada di source set `app/src/debug/`; source set `release` hanya berisi stub kosong. Mode Developer diakses dari tombol Pengaturan di build debug dan menjadi instrumen utama developer untuk menguji aplikasi di perangkat fisik.
+**Keputusan:** UI dan logika Mode Developer berada di source set `app/src/debug/`; source set `release` hanya berisi stub kosong. Mode Developer diakses dari tombol `Mode Developer` di sisi kanan Header pada build debug dan dibuka sebagai halaman penuh mandiri.
 
-**Penyimpanan salinan kerja:** Salinan kerja disimpan di `filesDir/dev-kit/` agar tidak dibersihkan sistem seperti `cacheDir`. Kit bawaan tidak pernah diubah; membukanya menghasilkan salinan kerja baru.
+**Penyimpanan kit internal & salinan kerja:** Salinan kerja yang sedang diedit disimpan di `filesDir/dev-kit/`. Kit hasil simpan internal disimpan di `filesDir/kits/<kitId>/` sehingga langsung muncul di Halaman Pilih Kit pemain tanpa harus mengekspor file `.vrkendang` ke memori HP.
 
-**Alur penyusunan kit:**
-1. **Buka salinan kerja atau buat kit baru:** Developer dapat membuka kit bawaan (misal `new-metro`), membuka file `.vrkendang` lewat `ACTION_OPEN_DOCUMENT`, atau membuat kit baru. Kit baru meminta `name` dan `kitId` (divalidasi dan tidak boleh sama dengan `kitId` bawaan), memakai tata letak template (New Metro) dengan seluruh zona `sound: null`, lalu langsung meminta lokasi file `.vrkendang` sebagai file sumber. `kitId` tidak dapat diubah setelah dibuat; `name` boleh diubah. Membuka file `.vrkendang` mengekstrak ke direktori sementara, memvalidasi, lalu baru menggantikan salinan kerja; kegagalan tidak mengubah salinan kerja saat ini.
-2. **Dua mode papan:** Mode UJI membunyikan zona seperti pemain. Mode EDIT memilih atau menggeser kendang tanpa membunyikan suara; zona dipilih lewat panel daftar zona atau sentuhan, lalu WAV, gain, dan divider diatur dari panel. Zona terpilih diberi tanda visual.
-3. **Pasang suara dari HP:** Developer memilih zona, menekan "Pilih Suara (WAV)", dan memilih file dari penyimpanan HP. Header diperiksa oleh `WavParser` di `:kit-core` (harus PCM 16-bit mono), file disalin ke salinan kerja sebagai `sounds/<zoneId>.wav`, `kit.json` diperbarui, dan sample langsung di-load ke C++ engine untuk diuji. Opsi "Kosongkan suara" mengembalikan `sound` ke `null`. Pemuatan sample saat stream berjalan dilakukan di luar thread audio lalu ditukar secara atomik agar tidak ada glitch.
-4. **Ubah parameter:** Nama kit, posisi, ukuran (`rx`, `ry`), busur pembatas Bass, `gain` per zona, dan urutan array `drums` (prioritas hit-test) dapat diatur. Menambah atau menghapus kendang/zona bukan cakupan MVP. Semua nilai dibatasi agar `kit.json` selalu lolos `KitValidator`.
-5. **Simpan / Simpan Sebagai:** "Simpan" menimpa file sumber lewat URI yang izinnya dipersistenkan tanpa dialog; bila belum ada file sumber (kit baru atau salinan kerja kit bawaan), "Simpan" membuka pemilih lokasi dan file itu menjadi file sumber. "Simpan Sebagai" selalu meminta lokasi baru. Sebelum menulis, paket disusun penuh di cache, dibaca ulang dengan `KitPackageReader`, dan divalidasi `KitValidator`; hanya setelah itu disalin ke URI. Bila validasi/penulisan gagal, salinan kerja tidak berubah dan developer ditawari Simpan Sebagai; bila izin URI hilang atau file sumber tidak terbaca, otomatis jatuh ke Simpan Sebagai. Paket hanya memuat WAV yang dirujuk `kit.json`, dan `version` naik satu tingkat setiap penyimpanan. Tidak ada file `.bak`.
-6. **Perubahan belum disimpan:** Indikator perubahan ditampilkan; keluar dari Mode Developer, membuka kit lain, atau menutup aplikasi dengan perubahan belum disimpan meminta konfirmasi simpan/buang.
-7. **Batas override pemain:** Layout override pemain tidak diterapkan pada salinan kerja; perubahan tata letak ditulis ke `kit.json` salinan kerja dan file `.vrkendang`, bukan ke `files/layouts/<kitId>.json`.
+**Alur penyusunan kit per kendang:**
+1. **Header Mode Developer yang rapi dan terpisah fungsinya:**
+   - `← Tutup` (kiri) dan nama kit aktif (`Kit: <Nama>`).
+   - `Impor` dan `Ekspor` (tengah): khusus untuk membuka atau mengekspor paket ZIP `.vrkendang` dari/ke penyimpanan HP via Storage Access Framework (`ACTION_OPEN_DOCUMENT` / `ACTION_CREATE_DOCUMENT`).
+   - `+ Kit Baru` (kanan): menyimpan konfigurasi saat ini sebagai **kit baru** di penyimpanan internal aplikasi (`filesDir/kits/<kitId>/`) dengan mengisi nama kit baru dan properti terkait tanpa membuka *file picker* HP.
+   - `✓ Simpan` (kanan): menyimpan perubahan langsung menimpa kit yang sedang diedit di penyimpanan internal aplikasi (`filesDir/kits/<kitId>/` dan `filesDir/dev-kit/`) tanpa membuka *file picker* HP.
+   - `▶ Uji Main` (kanan): beralih antara mode konfigurasi (`EDIT`) dan mode uji ketuk suara langsung (`UJI`).
+2. **Pola Pemilihan per Kendang (Panel Kiri → Panel Kanan):**
+   - **Panel Kiri (`PILIH KENDANG`)** menampilkan daftar 4 kendang sesuai `kit.json`: **`Bass`**, **`Kecil 1`**, **`Sedang`**, dan **`Kecil 2`** beserta pratinjau visual 4 kendang di bawahnya. Tombol pengubah urutan prioritas (`▲ Naik` / `▼ Turun`) dihapus dari UI karena urutan evaluasi mengikuti definisi tetap kit.
+   - **Panel Kanan (`KONFIGURASI: <NAMA KENDANG>`)** menampilkan pengaturan khusus untuk kendang yang sedang dipilih di panel kiri:
+     - **Pilihan Zona**: chip zona milik kendang tersebut (misal `bass-1` s/d `bass-5` saat memilih `Bass`; `kecil1-1` saat memilih `Kecil 1`; `sedang-1` & `sedang-2` saat memilih `Sedang`; `kecil2-1` & `kecil2-2` saat memilih `Kecil 2`).
+     - **Sampel Suara Zona**: menampilkan nama file WAV aktif atau `"Belum ada suara"`, tombol `Pilih WAV` (membuka pemilih file audio HP dan memvalidasi WAV PCM 16-bit mono via `WavParser`), `▶ Tes` (membunyikan sampel zona saat ini), `Hapus` (mengosongkan suara zona menjadi `null`), serta slider `Volume Zona (Gain)` (`0.0–2.0`).
+     - **Parameter Busur Bass (`dx`, `dy`, `r`)**: khusus ditampilkan saat kendang `Bass` dipilih, dengan slider interaktif (`dx` dan `dy` `-3.0..3.0`, `r` `0.1..3.0`) yang memperbarui kurva busur `C_div` secara real-time.
+3. **Indikator perubahan belum disimpan:** Keluar dari Mode Developer atau mengganti kit saat ada perubahan belum disimpan meminta konfirmasi simpan atau buang.
 
 **Komponen `:kit-core`:** `KitPackageWriter` menyusun paket `.vrkendang` dan `KitFactory` membuat kit baru dari template; keduanya Kotlin/JVM murni dan diuji unit test bersama `KitPackageReader`/`KitValidator`.
 

@@ -7,48 +7,51 @@ Menyediakan alat penyusun kit yang hanya tersedia di build debug, sebagai instru
 ## ADDED Requirements
 
 ### Requirement: Mode Developer hanya tersedia di build debug
-Mode Developer (alat penyusun kit) SHALL hanya dapat diakses pada APK debug dan tidak hadir sama sekali pada APK release. Tombol akses ke Mode Developer muncul di menu Pengaturan (⚙) khusus pada build debug.
+Mode Developer (alat penyusun kit) SHALL hanya dapat diakses pada APK debug dan tidak hadir sama sekali pada APK release. Tombol `Mode Developer` muncul di sisi kanan Header utama khusus pada build debug dan membuka Halaman Mode Developer layar penuh.
 
 #### Scenario: Tombol Mode Developer tampil di build debug
-- **WHEN** pengguna membuka menu Pengaturan di build debug
-- **THEN** terdapat opsi untuk membuka Mode Developer
+- **WHEN** aplikasi dijalankan pada build debug
+- **THEN** tombol `Mode Developer` tampil di sisi kanan Header utama dan membuka Halaman Mode Developer layar penuh saat diketuk
 
 #### Scenario: Mode Developer tidak ada di build release
-- **WHEN** pengguna membuka menu Pengaturan di build release
-- **THEN** tidak ada opsi Mode Developer di menu; kode Mode Developer tidak terdapat di APK
+- **WHEN** aplikasi dijalankan pada build release
+- **THEN** tombol `Mode Developer` tidak tampil di Header dan kode Mode Developer tidak terdapat di APK
 
-### Requirement: Buat kit baru dengan zona awal tanpa suara
-Developer SHALL dapat membuat kit baru di Mode Developer dengan mengisi nama dan `kitId`. `kitId` divalidasi mengikuti aturan `kit-data`, tidak boleh sama dengan `kitId` kit bawaan, dan tidak dapat diubah setelah kit dibuat; nama kit boleh diubah. Tata letak awal diambil dari template (usulan: New Metro) dengan seluruh `sound` null, lalu aplikasi meminta lokasi file `.vrkendang` sebagai file sumber.
+### Requirement: Pola pemilihan per kendang di Mode Developer
+Mode Developer SHALL menyajikan antarmuka dua panel: Panel Kiri (`PILIH KENDANG`) yang menampilkan daftar 4 kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`) beserta pratinjau visual papan, dan Panel Kanan (`KONFIGURASI: <NAMA KENDANG>`) yang hanya menampilkan daftar zona, pengaturan sampel WAV + volume (`gain`), dan parameter khusus milik kendang yang sedang dipilih di Panel Kiri. Tombol pengubah urutan prioritas kendang (`Naik`/`Turun`) SHALL tidak ditampilkan di UI.
 
-#### Scenario: Kit baru berhasil dibuat dengan zona kosong
-- **WHEN** developer memilih opsi "Buat Kit Baru", lalu mengisi nama dan `kitId` yang valid
-- **THEN** kit baru terbentuk dari template dengan seluruh zona berstatus `sound` null, aplikasi meminta lokasi file `.vrkendang`, dan file yang dipilih menjadi file sumber kit
+#### Scenario: Memilih kendang di panel kiri memperbarui panel kanan
+- **WHEN** developer memilih kendang `Bass` di panel kiri
+- **THEN** panel kanan menampilkan khusus konfigurasi `Bass`: chip zona `bass-1` s/d `bass-5`, kontrol sampel suara zona aktif, dan slider parameter busur Bass (`dx`, `dy`, `r`)
+
+#### Scenario: Memilih kendang selain Bass menyembunyikan parameter busur Bass
+- **WHEN** developer memilih kendang `Kecil 1`, `Sedang`, atau `Kecil 2` di panel kiri
+- **THEN** panel kanan menampilkan chip zona milik kendang tersebut (`kecil1-1`, `sedang-1`/`sedang-2`, atau `kecil2-1`/`kecil2-2`) beserta kontrol sampel suara dan gain, tanpa menampilkan parameter busur Bass
+
+### Requirement: Simpan sebagai Kit Baru di dalam aplikasi (`+ Kit Baru`)
+Developer SHALL dapat menyimpan konfigurasi yang sedang diedit menjadi kit baru di penyimpanan internal aplikasi (`filesDir/kits/<kitId>/`) melalui tombol `+ Kit Baru` dengan mengisi nama kit baru dan properti terkait (`kitId` divalidasi atau dibentuk otomatis sesuai aturan `kit-data` dan tidak boleh menimpa `kitId` bawaan), tanpa membuka pemilih file sistem HP. Kit baru yang disimpan SHALL langsung tersedia di Halaman Pilih Kit pemain.
+
+#### Scenario: Menyimpan konfigurasi saat ini sebagai kit baru
+- **WHEN** developer menekan tombol `+ Kit Baru` dan mengisi nama kit baru yang valid
+- **THEN** salinan kerja saat ini disimpan sebagai kit baru di `filesDir/kits/<kitId>/`, langsung menjadi kit yang sedang diedit, dan muncul di daftar Halaman Pilih Kit pemain
 
 #### Scenario: kitId duplikat atau tidak valid ditolak
-- **WHEN** developer mengisi `kitId` yang sama dengan `kitId` kit bawaan atau `kitId` yang melanggar aturan `kit-data`
-- **THEN** pembuatan kit ditolak dengan pesan galat yang jelas dan kit baru tidak dibuat
+- **WHEN** developer mengisi `kitId` yang sama dengan `kitId` bawaan atau melanggar aturan `kit-data`
+- **THEN** penyimpanan kit baru ditolak dengan pesan galat yang jelas
 
-#### Scenario: kitId tidak dapat diubah setelah kit dibuat
-- **WHEN** developer mengubah nama kit yang sudah dibuat
-- **THEN** nama kit berubah dan `kitId` tetap sama
+### Requirement: Buka kit sebagai salinan kerja dan Impor `.vrkendang`
+Saat Mode Developer dibuka, aplikasi SHALL memuat kit yang sedang aktif sebagai salinan kerja di `filesDir/dev-kit/` (bukan `cacheDir`); kit bawaan APK tidak pernah diubah secara langsung. Developer juga SHALL dapat mengimpor file paket `.vrkendang` dari penyimpanan HP melalui tombol `Impor` (`ACTION_OPEN_DOCUMENT`), yang mengekstrak ke direktori sementara, memvalidasi, lalu menggantikan salinan kerja. Bila gagal, aplikasi menampilkan pesan galat dan salinan kerja saat ini tidak berubah.
 
-### Requirement: Buka kit sebagai salinan kerja
-Developer SHALL dapat membuka file `.vrkendang` dari penyimpanan HP atau kit bawaan APK sebagai salinan kerja di `filesDir/dev-kit/` (bukan `cacheDir`); kit bawaan tidak pernah diubah. Membuka `.vrkendang` mengekstrak ke direktori sementara, memvalidasi, lalu baru menggantikan salinan kerja. Bila gagal, aplikasi menampilkan pesan galat dan salinan kerja saat ini tidak berubah; membatalkan pemilih file juga tidak mengubah apa pun.
-
-#### Scenario: Developer membuka file `.vrkendang` dari penyimpanan HP
-- **WHEN** developer memilih "Buka Kit" dan memilih file `.vrkendang` yang valid dari pemilih file sistem
-- **THEN** file diekstrak ke direktori sementara, divalidasi, dimuat ke `filesDir/dev-kit/` sebagai salinan kerja, dan file tersebut menjadi file sumber kit yang siap diedit
-
-#### Scenario: Developer membuka kit bawaan APK sebagai salinan kerja
-- **WHEN** developer memilih kit bawaan dari daftar dan memilih "Buka sebagai Salinan Kerja"
-- **THEN** kit bawaan diekstrak ke `filesDir/dev-kit/`; kit asli di dalam APK tidak tersentuh
+#### Scenario: Developer mengimpor file `.vrkendang` dari penyimpanan HP
+- **WHEN** developer menekan tombol `Impor` dan memilih file `.vrkendang` yang valid dari pemilih file sistem
+- **THEN** file diekstrak ke direktori sementara, divalidasi, dan dimuat ke `filesDir/dev-kit/` sebagai salinan kerja yang siap diedit
 
 #### Scenario: Paket tidak valid tidak mengubah salinan kerja
 - **WHEN** developer memilih file `.vrkendang` dengan ZIP rusak, entri path traversal, ukuran melebihi batas, atau `kit.json` tidak valid
 - **THEN** aplikasi menampilkan pesan galat yang jelas dan salinan kerja yang sedang terbuka tetap tidak berubah
 
 #### Scenario: Membatalkan pemilih file tidak mengubah apa pun
-- **WHEN** developer membuka pemilih file lalu membatalkannya
+- **WHEN** developer membuka pemilih file `Impor` lalu membatalkannya
 - **THEN** tidak ada file yang diekstrak dan salinan kerja saat ini tetap sama
 
 #### Scenario: Salinan kerja bertahan dari pembersihan cache sistem
@@ -137,39 +140,26 @@ Developer SHALL dapat menyesuaikan parameter busur pembatas Bass (`dx`, `dy`, `r
 - **WHEN** developer memasukkan nilai `dx`/`dy` di luar -3.0 sampai 3.0 atau `r` ≤ 0 atau > 3.0
 - **THEN** perubahan ditolak dengan pesan galat yang jelas dan nilai divider sebelumnya tetap dipakai
 
-### Requirement: Simpan kit ke file sumber
-Developer SHALL dapat menyimpan seluruh isi kit yang sedang diedit menjadi satu file `.vrkendang`. Bila kit memiliki file sumber, "Simpan" menimpa file itu lewat URI berizin persisten tanpa dialog; bila belum ada file sumber, "Simpan" membuka pemilih lokasi dan file yang dipilih menjadi file sumber. Penyimpanan SHALL memakai pengaman validasi paket dan tidak membuat file `.bak`.
+### Requirement: Simpan edit kit saat ini di dalam aplikasi (`✓ Simpan`) dan Ekspor paket `.vrkendang` terpisah (`Ekspor`)
+Mode Developer SHALL memisahkan aksi penyimpanan internal dari aksi ekspor file ZIP:
+1. Tombol `✓ Simpan` SHALL menyimpan dan menimpa konfigurasi kit yang sedang diedit langsung di penyimpanan internal aplikasi (`filesDir/kits/<kitId>/` dan `filesDir/dev-kit/`) tanpa membuka pemilih file penyimpanan HP.
+2. Tombol `Ekspor` SHALL secara khusus mengekspor kit saat ini menjadi satu file paket `.vrkendang` (ZIP) ke penyimpanan HP melalui pemilih lokasi sistem (`ACTION_CREATE_DOCUMENT`), setelah paket disusun penuh di cache dan divalidasi oleh `KitPackageReader` serta `KitValidator`.
 
-#### Scenario: Simpan ke file sumber menimpa tanpa dialog
-- **WHEN** kit memiliki file sumber dan developer menekan "Simpan"
-- **THEN** paket disusun penuh di cache, dibaca ulang dan divalidasi, lalu ditulis menimpa file sumber lewat URI yang izinnya dipersistenkan tanpa membuka pemilih lokasi dan tanpa membuat file `.bak`
+#### Scenario: Tombol Simpan menyimpan perubahan secara internal tanpa membuka pemilih file HP
+- **WHEN** developer mengedit suara atau parameter zona lalu menekan tombol `✓ Simpan`
+- **THEN** perubahan disimpan menimpa kit saat ini di penyimpanan internal aplikasi (`filesDir/kits/<kitId>/`), aktif langsung di papan utama, dan tidak membuka pemilih lokasi file sistem HP
 
-#### Scenario: Simpan tanpa file sumber membuka pemilih lokasi
-- **WHEN** kit belum memiliki file sumber (kit baru atau salinan kerja dari kit bawaan) dan developer menekan "Simpan"
-- **THEN** aplikasi membuka pemilih lokasi, menulis paket ke file yang dipilih, dan file itu menjadi file sumber kit
+#### Scenario: Tombol Ekspor menulis paket .vrkendang ke penyimpanan HP
+- **WHEN** developer menekan tombol `Ekspor` dan memilih lokasi di penyimpanan HP
+- **THEN** paket `.vrkendang` disusun di cache, divalidasi oleh `KitPackageReader` dan `KitValidator`, lalu disalin ke lokasi URI yang dipilih tanpa membuat file `.bak`
 
-#### Scenario: Pengaman penulisan gagal tidak merusak salinan kerja
-- **WHEN** validasi paket atau penulisan ke URI gagal
-- **THEN** aplikasi menampilkan pesan galat, salinan kerja tidak berubah, dan developer ditawari Simpan Sebagai ke lokasi lain
-
-#### Scenario: Izin URI hilang otomatis jatuh ke Simpan Sebagai
-- **WHEN** izin URI file sumber hilang atau file sumber tidak dapat dibaca
-- **THEN** aplikasi otomatis membuka alur Simpan Sebagai tanpa mengubah salinan kerja
+#### Scenario: Membatalkan Ekspor tidak mengubah salinan kerja
+- **WHEN** developer menekan tombol `Ekspor` lalu membatalkan pemilih lokasi file
+- **THEN** salinan kerja dan kit tersimpan di dalam aplikasi tetap tidak berubah
 
 #### Scenario: Paket hanya berisi WAV yang dirujuk kit.json
-- **WHEN** developer menyimpan kit yang direktori kerjanya masih memiliki file WAV yatim
+- **WHEN** developer mengekspor kit yang direktori kerjanya masih memiliki file WAV yatim
 - **THEN** paket `.vrkendang` hanya berisi `kit.json` dan file `sounds/<zoneId>.wav` yang dirujuk oleh `kit.json`, tanpa file WAV yatim
-
-### Requirement: Simpan kit sebagai file baru
-"Simpan Sebagai" SHALL selalu meminta lokasi baru dan menulis file baru, walaupun kit sudah memiliki file sumber; file baru itu SHALL menjadi file sumber kit. Simpan Sebagai memakai pengaman penulisan dan aturan isi paket yang sama dengan Simpan. Membatalkan pemilih lokasi berarti tidak ada perubahan.
-
-#### Scenario: Simpan Sebagai selalu meminta lokasi baru
-- **WHEN** developer memilih "Simpan Sebagai" pada kit yang sudah memiliki file sumber
-- **THEN** pemilih lokasi selalu terbuka, file baru ditulis, dan file baru tersebut menjadi file sumber kit
-
-#### Scenario: Membatalkan Simpan Sebagai tidak mengubah file sumber
-- **WHEN** developer membuka pemilih lokasi Simpan Sebagai lalu membatalkannya
-- **THEN** file sumber lama dan salinan kerja tetap tidak berubah
 
 ### Requirement: Versi kit naik setiap penyimpanan
 Setiap operasi simpan (Simpan maupun Simpan Sebagai) SHALL menaikkan nilai `version` di `kit.json` tepat satu tingkat. Tidak ada perilaku lain di MVP yang bergantung pada nilai `version`.
@@ -220,11 +210,11 @@ Layout override pemain SHALL tidak diterapkan pada salinan kerja di Mode Develop
 - **THEN** perubahan ditulis ke `kit.json` salinan kerja dan file `.vrkendang`, dan layout override pemain tidak diubah
 
 ### Requirement: Cakupan penyuntingan struktur kit di MVP
-Struktur kit SHALL tetap 4 kendang dari template pada MVP. Developer SHALL dapat mengubah nama kit, `center`, radius (`rx`, `ry`), parameter divider Bass, sound dan gain tiap zona, serta urutan array `drums` (prioritas hit-test). Menambah atau menghapus kendang dan zona dicatat sebagai non-goal MVP dan pekerjaan lanjutan.
+Struktur kit SHALL tetap 4 kendang dari template pada MVP (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`). Developer SHALL dapat mengubah nama kit (saat menyimpan sebagai kit baru), `center`, radius (`rx`, `ry`), parameter divider Bass, serta sound dan gain tiap zona. Kontrol urutan prioritas array `drums` serta aksi menambah atau menghapus kendang dan zona tidak ditampilkan di UI Mode Developer MVP.
 
 #### Scenario: Developer mengubah properti yang termasuk cakupan MVP
-- **WHEN** developer mengubah nama kit, posisi, radius, divider Bass, sound/gain zona, atau urutan array `drums`
-- **THEN** perubahan diterapkan pada salinan kerja dan dapat disimpan ke paket `.vrkendang`
+- **WHEN** developer mengubah nama kit, posisi, radius, divider Bass, atau sound/gain zona
+- **THEN** perubahan diterapkan pada salinan kerja, dapat disimpan secara internal (`✓ Simpan` / `+ Kit Baru`), dan dapat diekspor ke paket `.vrkendang` (`Ekspor`)
 
 #### Scenario: Menambah atau menghapus kendang/zona tidak tersedia di MVP
 - **WHEN** developer mencari aksi untuk menambah atau menghapus kendang/zona di Mode Developer MVP
