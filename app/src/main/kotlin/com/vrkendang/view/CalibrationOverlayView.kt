@@ -371,7 +371,7 @@ class CalibrationOverlayView @JvmOverloads constructor(
         )
 
         // Gambar garis panduan batas zona akustik transparan dari geometri hit-testing (Task 10.1)
-        for (drum in currentWorking.drums) {
+        for (drum in currentWorking.drums.asReversed()) {
             val cx = mapper.toPixelX(drum.center.x)
             val cy = mapper.toPixelY(drum.center.y)
             val rx = mapper.toPixelRadiusX(drum.radius.rx)

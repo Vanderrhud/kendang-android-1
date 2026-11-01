@@ -154,6 +154,9 @@ class KendangBoardView @JvmOverloads constructor(
     /** Callback saat ukuran kendang dicubit 2 jari (pinch-to-scale) pada mode edit tata letak (Task 10.3). */
     var onDrumPinchScaleListener: ((drumId: String, scaleFactor: Float) -> Unit)? = null
 
+    /** Callback saat gestur geser atau cubit kendang selesai (jari dilepas) pada mode edit tata letak. */
+    var onDrumEditFinishedListener: (() -> Unit)? = null
+
     /** Overlay garis batas zona untuk kebutuhan kalibrasi (Task 7.5). */
     val zoneGuideOverlay: ZoneGuideOverlay = ZoneGuideOverlayProvider.create()
 
@@ -350,8 +353,8 @@ class KendangBoardView @JvmOverloads constructor(
 
         val now = SystemClock.uptimeMillis()
 
-        // 2. Render badan kendang 3D terlebih dahulu (di lapisan bawah kulit kendang)
-        for (drum in currentKit.drums) {
+        // 2. Render badan kendang 3D terlebih dahulu (di lapisan bawah kulit kendang, urut dari belakang ke depan)
+        for (drum in currentKit.drums.asReversed()) {
             val cx = mapper.toPixelX(drum.center.x)
             val cy = mapper.toPixelY(drum.center.y)
             val rx = mapper.toPixelRadiusX(drum.radius.rx)
@@ -360,8 +363,8 @@ class KendangBoardView @JvmOverloads constructor(
             drawDrumBody3D(canvas, cx, cy, rx, ry)
         }
 
-        // 3. Render seluruh kulit kendang (sesuai urutan array drums)
-        for (drum in currentKit.drums) {
+        // 3. Render seluruh kulit kendang (sesuai urutan z-order: indeks 0 di atas, render dari belakang ke depan)
+        for (drum in currentKit.drums.asReversed()) {
             val cx = mapper.toPixelX(drum.center.x)
             val cy = mapper.toPixelY(drum.center.y)
             val baseRx = mapper.toPixelRadiusX(drum.radius.rx)
@@ -448,7 +451,7 @@ class KendangBoardView @JvmOverloads constructor(
         zoneLabelPaint.textSize = 10.5f * density
         drumTitlePaint.textSize = 11f * density
 
-        for (drum in currentKit.drums) {
+        for (drum in currentKit.drums.asReversed()) {
             val cx = mapper.toPixelX(drum.center.x)
             val cy = mapper.toPixelY(drum.center.y)
             val rx = mapper.toPixelRadiusX(drum.radius.rx)
@@ -846,7 +849,9 @@ class KendangBoardView @JvmOverloads constructor(
                         val hit = HitTester.findHit(hitKit, canvasPt.x, canvasPt.y)
                         if (hit != null) {
                             selectedDrumId = hit.drum.id
+                            selectedZoneId = hit.zone.id
                             onDrumSelectedListener?.invoke(hit.drum)
+                            onZoneSelectedListener?.invoke(hit.drum, hit.zone)
 
                             // Mulai sesi drag dengan jari pertama
                             activePointerId = event.getPointerId(0)
@@ -923,10 +928,14 @@ class KendangBoardView @JvmOverloads constructor(
             }
 
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                val wasActive = isDragging || isPinching
                 isDragging = false
                 isPinching = false
                 pinchLastSpanPx = 0f
                 activePointerId = MotionEvent.INVALID_POINTER_ID
+                if (wasActive) {
+                    onDrumEditFinishedListener?.invoke()
+                }
             }
         }
 

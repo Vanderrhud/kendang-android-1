@@ -104,6 +104,7 @@
 - [x] 11.8 Implementasikan pemuatan/penggantian sample saat stream berjalan tanpa memblokir audio callback: urai dan resample di luar thread audio, tukar sample secara atomik, dan selesaikan/hentikan suara lama secara mulus.
 - [x] 11.9 Konfigurasi zona fleksibel 1 s/d 4 zona untuk kendang non-bass dengan model juring radial (1/2, 1/3, 1/4 lingkaran) dan slider putaran sudut rotasi (0° - 360°) untuk memutar garis sekat secara langsung — verifikasi: unit test HitTesterTest dan KitValidatorTest membuktikan evaluasi juring radial dan putaran sudut berfungsi akurat.
 - [x] 11.10 Fitur tambah kendang baru (`+ Kendang` dengan nama bebas dan pilihan 1–4 zona) dan hapus kendang (`Hapus Kendang` dengan proteksi tidak boleh menghapus Bass) di Mode Developer — verifikasi: unit test DevKitAuthoringSessionTest membuktikan penambahan kendang baru dan penghapusan kendang non-bass serta penolakan penghapusan Bass.
+- [x] 11.11 Penyesuaian tata letak kendang di Mode Developer (geser 1 jari, cubit 2 jari, dan slider numerik Posisi X, Posisi Y, Ukuran) serta aturan tumpang tindih Z-Order (kendang yang disentuh/diedit otomatis diangkat ke lapisan teratas indeks 0) — verifikasi: unit test DevKitAuthoringSessionTest membuktikan sinkronisasi visual dan evaluasi hit-test saat kendang overlap.
 
 ## 12. Verifikasi Integrasi & Kriteria Keberhasilan
 

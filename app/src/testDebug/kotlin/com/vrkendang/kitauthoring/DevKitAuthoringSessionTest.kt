@@ -274,4 +274,38 @@ class DevKitAuthoringSessionTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun testBringDrumToFrontAndPositionSizeAdjustment() {
+        val tempDir = File.createTempFile("dev-session-front", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            val kit = session.createNewKit("test-front", "Test Front", null)
+            assertEquals(listOf("bass", "kecil1", "sedang", "kecil2"), kit.drums.map { it.id })
+
+            // 1. Pindahkan 'sedang' (indeks 2) ke posisi teratas (indeks 0)
+            val kitFront = session.bringDrumToFront("sedang")
+            assertEquals(listOf("sedang", "bass", "kecil1", "kecil2"), kitFront.drums.map { it.id })
+            assertTrue(session.hasUnsavedChanges)
+
+            // 2. Pindahkan kendang yang sudah di indeks 0 ('sedang') -> tidak berubah
+            val kitSame = session.bringDrumToFront("sedang")
+            assertEquals(listOf("sedang", "bass", "kecil1", "kecil2"), kitSame.drums.map { it.id })
+
+            // 3. Pindahkan 'kecil2' ke posisi teratas
+            val kitKecil2Front = session.bringDrumToFront("kecil2")
+            assertEquals(listOf("kecil2", "sedang", "bass", "kecil1"), kitKecil2Front.drums.map { it.id })
+
+            // 4. Ubah posisi dan ukuran kendang teratas
+            val kitMoved = session.updateDrumCenter("kecil2", Point(0.65f, 0.45f))
+            assertEquals(Point(0.65f, 0.45f), kitMoved.drums.first { it.id == "kecil2" }.center)
+
+            val kitResized = session.updateDrumRadius("kecil2", Radius(0.25f, 0.25f))
+            assertEquals(Radius(0.25f, 0.25f), kitResized.drums.first { it.id == "kecil2" }.radius)
+
+            com.vrkendang.kitcore.validation.KitValidator.validateOrThrow(kitResized)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

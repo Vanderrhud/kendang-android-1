@@ -17,6 +17,10 @@ Papan kendang SHALL dirender oleh satu Custom View tunggal (`KendangBoardView`) 
 - **WHEN** kit dimuat pada perangkat dengan rasio layar apapun
 - **THEN** kulit tiap kendang tampil sesuai nilai `center` dan `radius` di `kit.json` (berbentuk lingkaran sempurna bila `rx == ry`), dan tidak melar di rasio layar berbeda
 
+#### Scenario: Urutan rendering visual selaras dengan prioritas hit-test (Z-Order)
+- **WHEN** dua kendang saling tumpang tindih
+- **THEN** kendang dirender dari indeks belakang ke depan (`drums.asReversed()`) sehingga kendang berindeks 0 (prioritas tertinggi hit-test) tampak di lapisan paling atas secara visual
+
 ### Requirement: Kanvas aspect-fit dan sistem koordinat
 Kanvas papan kendang SHALL di-fit berdasarkan tinggi `KendangBoardView`, dipusatkan secara horizontal, dan sisa ruang di kiri-kanan dijadikan margin. Sentuhan di area margin atau di luar kanvas SHALL diabaikan. Konversi dari piksel ke satuan kanvas (`X_u = x * canvasAspect`, `Y_u = y`) SHALL dilakukan satu kali secara konsisten untuk render dan hit-testing.
 

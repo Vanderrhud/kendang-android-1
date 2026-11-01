@@ -333,6 +333,26 @@ class DevKitAuthoringSession(
     }
 
     /**
+     * Memindahkan kendang ke lapisan teratas (indeks 0 pada array drums)
+     * agar berada di lapisan visual paling atas dan diprioritaskan dalam hit-testing saat overlap.
+     */
+    fun bringDrumToFront(drumId: String): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val index = kit.drums.indexOfFirst { it.id == drumId }
+        if (index <= 0) return kit
+
+        val mutableList = kit.drums.toMutableList()
+        val item = mutableList.removeAt(index)
+        mutableList.add(0, item)
+
+        val updated = kit.copy(drums = mutableList)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
      * Mengubah gain suatu zona (rentang 0.0 s.d. 2.0) (Task 11.3).
      */
     fun updateZoneGain(zoneId: String, gain: Float): KitData {

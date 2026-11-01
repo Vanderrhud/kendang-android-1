@@ -20,6 +20,7 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -306,9 +307,13 @@ class DevAuthoringActivity : Activity() {
         }
         leftColumn.addView(drumTabsRow)
 
+        val rightPanelScroll = ScrollView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 4.0f)
+            isFillViewport = true
+        }
+
         val rightPanelContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 4.0f)
             background = GradientDrawable().apply {
                 setColor(Color.parseColor("#1C1815"))
                 cornerRadius = 10f * density
@@ -316,9 +321,10 @@ class DevAuthoringActivity : Activity() {
             }
             setPadding((10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt(), (8 * density).toInt())
         }
+        rightPanelScroll.addView(rightPanelContainer)
 
         val previewBoard = KendangBoardView(this).apply {
-            mode = KendangBoardView.BoardMode.SELECT_ZONE
+            mode = KendangBoardView.BoardMode.EDIT_LAYOUT
             showZoneGuides = true
             showZoneTextBadges = false // Kulit kendang 100% bersih tanpa tempelan teks!
             fullScreenEdgeToEdge = false
@@ -329,10 +335,50 @@ class DevAuthoringActivity : Activity() {
             this.selectedZoneId = this@DevAuthoringActivity.selectedZoneId
         }
 
+        previewBoard.onDrumSelectedListener = { drum ->
+            selectedDrumId = drum.id
+            selectedZoneId = drum.zones.first().id
+            val updated = session.bringDrumToFront(drum.id)
+            previewBoard.kit = updated
+            previewBoard.selectedDrumId = selectedDrumId
+            previewBoard.selectedZoneId = selectedZoneId
+            refreshHeaderStatus()
+            populateDrumTabs(drumTabsRow, previewBoard, rightPanelContainer)
+            populateCompactRightPanel(rightPanelContainer, previewBoard, drumTabsRow)
+        }
+
         previewBoard.onZoneSelectedListener = { drum, zone ->
             selectedDrumId = drum.id
             selectedZoneId = zone.id
+            val updated = session.bringDrumToFront(drum.id)
+            previewBoard.kit = updated
+            previewBoard.selectedDrumId = selectedDrumId
+            previewBoard.selectedZoneId = selectedZoneId
+            refreshHeaderStatus()
             populateDrumTabs(drumTabsRow, previewBoard, rightPanelContainer)
+            populateCompactRightPanel(rightPanelContainer, previewBoard, drumTabsRow)
+        }
+
+        previewBoard.onDrumMovedListener = { drumId, newCenter ->
+            val clampedX = newCenter.x.coerceIn(-0.5f, 1.5f)
+            val clampedY = newCenter.y.coerceIn(-0.5f, 1.5f)
+            val updated = session.updateDrumCenter(drumId, com.vrkendang.kitcore.model.Point(clampedX, clampedY))
+            previewBoard.kit = updated
+            refreshHeaderStatus()
+        }
+
+        previewBoard.onDrumPinchScaleListener = { drumId, scaleFactor ->
+            val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drumId }
+            if (curDrum != null) {
+                val newRx = (curDrum.radius.rx * scaleFactor).coerceIn(0.05f, 1.50f)
+                val newRy = (curDrum.radius.ry * scaleFactor).coerceIn(0.05f, 1.50f)
+                val updated = session.updateDrumRadius(drumId, com.vrkendang.kitcore.model.Radius(newRx, newRy))
+                previewBoard.kit = updated
+                refreshHeaderStatus()
+            }
+        }
+
+        previewBoard.onDrumEditFinishedListener = {
             populateCompactRightPanel(rightPanelContainer, previewBoard, drumTabsRow)
         }
 
@@ -344,7 +390,7 @@ class DevAuthoringActivity : Activity() {
         )
 
         root.addView(leftColumn)
-        root.addView(rightPanelContainer)
+        root.addView(rightPanelScroll)
 
         populateDrumTabs(drumTabsRow, previewBoard, rightPanelContainer)
         populateCompactRightPanel(rightPanelContainer, previewBoard, drumTabsRow)
@@ -809,7 +855,76 @@ class DevAuthoringActivity : Activity() {
 
         rightContainer.addView(audioBox)
 
-        // 3. Kotak Parameter Geometri Eksklusif per Zona Terpilih (Khusus Bass)
+        // 3. Kotak Posisi & Ukuran Kendang (Manipulasi Tata Letak)
+        val posSizeBox = createCompactBox()
+        val posSizeHeader = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, (2 * density).toInt())
+        }
+        val posSizeTitle = TextView(this).apply {
+            text = "POSISI & UKURAN: $displayName"
+            textSize = 10f
+            setTextColor(Color.parseColor("#A89F96"))
+            paint.isFakeBoldText = true
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+        }
+        posSizeHeader.addView(posSizeTitle)
+
+        val bringFrontBtn = Button(this).apply {
+            text = "▲ Bawa ke Depan"
+            textSize = 9.5f
+            setTextColor(Color.parseColor("#FFE082"))
+            isAllCaps = false
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#3E2723"))
+                cornerRadius = 4f * density
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#FFA000"))
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                (22 * density).toInt()
+            )
+            setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+            setOnClickListener {
+                val updated = session.bringDrumToFront(drum.id)
+                previewBoard.kit = updated
+                refreshHeaderStatus()
+                populateDrumTabs(tabsRow, previewBoard, rightContainer)
+                populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+            }
+        }
+        posSizeHeader.addView(bringFrontBtn)
+        posSizeBox.addView(posSizeHeader)
+
+        posSizeBox.addView(
+            buildCompactDividerSlider("Posisi X", drum.center.x, 0.05f, 0.95f) { newX ->
+                val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                val updated = session.updateDrumCenter(drum.id, com.vrkendang.kitcore.model.Point(newX, curDrum.center.y))
+                previewBoard.kit = updated
+                refreshHeaderStatus()
+            }
+        )
+
+        posSizeBox.addView(
+            buildCompactDividerSlider("Posisi Y", drum.center.y, 0.05f, 0.95f) { newY ->
+                val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                val updated = session.updateDrumCenter(drum.id, com.vrkendang.kitcore.model.Point(curDrum.center.x, newY))
+                previewBoard.kit = updated
+                refreshHeaderStatus()
+            }
+        )
+
+        posSizeBox.addView(
+            buildCompactDividerSlider("Radius/Ukuran", drum.radius.rx, 0.08f, 0.50f) { newR ->
+                val updated = session.updateDrumRadius(drum.id, com.vrkendang.kitcore.model.Radius(newR, newR))
+                previewBoard.kit = updated
+                refreshHeaderStatus()
+            }
+        )
+        rightContainer.addView(posSizeBox)
+
+        // 4. Kotak Parameter Geometri Eksklusif per Zona Terpilih (Khusus Bass)
         if (drum.model == "bass" && drum.zones.size > 1 && drum.divider != null) {
             val divider = drum.divider!!
 

@@ -43,7 +43,7 @@ internal class DebugZoneGuideOverlay : ZoneGuideOverlay {
     ) {
         if (!isEnabled) return
 
-        for (drum in kit.drums) {
+        for (drum in kit.drums.asReversed()) {
             val cx = mapper.toPixelX(drum.center.x)
             val cy = mapper.toPixelY(drum.center.y)
             val rx = mapper.toPixelRadiusX(drum.radius.rx)

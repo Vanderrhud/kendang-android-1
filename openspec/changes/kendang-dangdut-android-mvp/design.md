@@ -126,7 +126,7 @@ Rumus:
     - $\text{zoneIndex} = \lfloor \theta_{\text{rel}} / (360^\circ / N) \rfloor$
 - **Model `single` (Kecil 1):** dalam oval, langsung zona tunggal (Kecil1-1).
 
-**Urutan evaluasi:** mengikuti urutan elemen array `drums` di `kit.json` (indeks kecil dicek lebih dulu). Untuk New Metro: Bass → Kecil 1 → Sedang → Kecil 2. Bila tidak ada yang cocok, sentuhan diabaikan.
+**Urutan evaluasi dan Z-Order Overlap:** mengikuti urutan elemen array `drums` di `kit.json` (indeks 0 dicek lebih dulu dan berada di lapisan teratas / Top Layer). Saat merender, kendang digambar dari indeks belakang ke depan (`drums.asReversed()`), sehingga kendang di indeks 0 tampak di paling atas secara visual dan menangkap sentuhan saat tumpang tindih. Pada Mode Developer, kendang yang disentuh atau diedit otomatis dipindahkan ke indeks 0 (*Bring to Front*). Bila tidak ada yang cocok, sentuhan diabaikan.
 
 ---
 

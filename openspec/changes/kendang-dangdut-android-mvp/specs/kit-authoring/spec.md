@@ -240,6 +240,14 @@ Struktur kit SHALL mendukung penambahan kendang baru dan penghapusan kendang (ke
 - **WHEN** developer memilih jumlah zona (1–4) pada kendang non-bass dan menggeser slider putaran sudut ($0^\circ - 360^\circ$)
 - **THEN** kendang menyesuaikan jumlah zona juring radialnya dan garis pembatas sekat berputar secara real-time pada papan pratinjau
 
+#### Scenario: Developer menyesuaikan posisi dan ukuran kendang di Mode Developer
+- **WHEN** developer menggeser kendang dengan 1 jari, mencubit dengan 2 jari, atau menggunakan slider Posisi X, Posisi Y, dan Radius di panel kanan
+- **THEN** posisi dan ukuran kendang diperbarui secara real-time pada pratinjau dan tersimpan di salinan kerja
+
+#### Scenario: Kendang yang disentuh dan digeser otomatis berada di lapisan teratas (Z-Order Overlap)
+- **WHEN** developer menyentuh atau menggeser suatu kendang saat terjadi tumpang tindih dengan kendang lain
+- **THEN** kendang tersebut otomatis diangkat ke lapisan teratas (indeks 0 array `drums`), tampak di atas kendang lain secara visual, dan memenangkan evaluasi sentuhan (hit-test) pada area tumpang tindih
+
 ### Requirement: Semua perubahan salinan kerja tetap valid
 Setiap perubahan pada salinan kerja SHALL menghasilkan `kit.json` yang lolos `KitValidator`. Kontrol (slider, input) SHALL membatasi nilai sesuai aturan validasi (gain 0.0–2.0, batas skala dan posisi sama dengan `calibration-mode`), dan perubahan yang tidak valid SHALL ditolak dengan pesan yang jelas.
 
