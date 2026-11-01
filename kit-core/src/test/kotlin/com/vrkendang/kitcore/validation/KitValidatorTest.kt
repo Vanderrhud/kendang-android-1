@@ -166,6 +166,53 @@ class KitValidatorTest {
         )
         val errorsBadDiv = KitValidator.validate(kitBadDiv)
         assertTrue(errorsBadDiv.any { it.contains("divider") })
+
+        // divider rx/ry di luar batas
+        val kitBadRx = createValidKit().copy(
+            drums = listOf(
+                createValidKit().drums[0].copy(
+                    divider = DividerData(dx = 0.0f, dy = 0.0f, r = 0.8f, rx = 4.0f, ry = -1.0f)
+                )
+            )
+        )
+        val errorsBadRx = KitValidator.validate(kitBadRx)
+        assertTrue(errorsBadRx.any { it.contains("rx") || it.contains("ry") })
+
+        // divider split di luar 0.0..1.0
+        val kitBadSplitVal = createValidKit().copy(
+            drums = listOf(
+                createValidKit().drums[0].copy(
+                    divider = DividerData(dx = 0.0f, dy = 0.0f, r = 0.8f, splits = listOf(1.5f))
+                )
+            )
+        )
+        val errorsBadSplitVal = KitValidator.validate(kitBadSplitVal)
+        assertTrue(errorsBadSplitVal.any { it.contains("split") })
+    }
+
+    @Test
+    fun testBassZoneCountValidations() {
+        // Bass dengan 1 zona (valid)
+        val kitBass1 = createValidKit().copy(
+            drums = listOf(
+                createValidKit().drums[0].copy(
+                    zones = listOf(ZoneData(id = "bass-1", region = "main"))
+                )
+            )
+        )
+        assertTrue(KitValidator.validate(kitBass1).isEmpty(), "Bass dengan 1 zona harus valid")
+
+        // Bass dengan > 5 zona (tidak valid)
+        val sixZones = (1..6).map {
+            ZoneData(id = "bass-$it", region = if (it == 1) "main" else "crescent", band = if (it > 1) (it - 2).coerceIn(0, 3) else null)
+        }
+        val kitBass6 = createValidKit().copy(
+            drums = listOf(
+                createValidKit().drums[0].copy(zones = sixZones)
+            )
+        )
+        val errors6 = KitValidator.validate(kitBass6)
+        assertTrue(errors6.any { it.contains("1 sampai 5 zona") })
     }
 
     @Test

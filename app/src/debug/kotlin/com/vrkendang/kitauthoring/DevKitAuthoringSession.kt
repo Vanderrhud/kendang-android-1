@@ -354,26 +354,153 @@ class DevKitAuthoringSession(
     }
 
     /**
-     * Mengubah parameter busur divider Bass (dx, dy, r) (Task 11.4).
+     * Mengubah parameter busur divider Bass (dx, dy, r, rx, ry, splits) (Task 11.4).
      *
      * Validasi rentang:
      * dx/dy: -3.0 s.d. 3.0
-     * r: > 0.0 s.d. 3.0
+     * rx/ry: > 0.0 s.d. 3.0
      */
-    fun updateBassDivider(dx: Float, dy: Float, r: Float): KitData {
+    fun updateBassDivider(
+        dx: Float,
+        dy: Float,
+        r: Float = 0.80f,
+        rx: Float = r,
+        ry: Float = r,
+        splits: List<Float>? = null
+    ): KitData {
         if (dx !in -3.0f..3.0f || dy !in -3.0f..3.0f) {
             throw IllegalArgumentException("Parameter dx dan dy harus berada di rentang -3.0 sampai 3.0")
         }
-        if (r <= 0.0f || r > 3.0f) {
-            throw IllegalArgumentException("Parameter r harus > 0.0 dan <= 3.0")
+        val effRx = if (rx > 0f) rx else r
+        val effRy = if (ry > 0f) ry else r
+        if (effRx <= 0.0f || effRx > 3.0f || effRy <= 0.0f || effRy > 3.0f) {
+            throw IllegalArgumentException("Parameter rx dan ry harus > 0.0 dan <= 3.0")
         }
 
         val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
         val updatedDrums = kit.drums.map { drum ->
             if (drum.model == "bass") {
-                drum.copy(divider = DividerData(dx, dy, r))
+                val currentSplits = splits ?: drum.divider?.splits
+                drum.copy(
+                    divider = DividerData(
+                        dx = dx,
+                        dy = dy,
+                        r = r,
+                        rx = effRx,
+                        ry = effRy,
+                        splits = currentSplits
+                    )
+                )
             } else drum
         }
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Mengubah jumlah zona aktif pada kendang Bass (1 sampai 5 zona).
+     */
+    fun setBassZoneCount(count: Int): KitData {
+        val targetCount = count.coerceIn(1, 5)
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val bassDrum = kit.drums.firstOrNull { it.model == "bass" } ?: return kit
+
+        // Ambil pemetaan sound dan gain lama agar tidak hilang saat berganti jumlah zona
+        val oldZoneMap = bassDrum.zones.associateBy { it.id }
+
+        val newZones = mutableListOf<com.vrkendang.kitcore.model.ZoneData>()
+        // Zona 1: Selalu ada (main)
+        val oldMain = oldZoneMap["bass-1"]
+        newZones.add(
+            com.vrkendang.kitcore.model.ZoneData(
+                id = "bass-1",
+                region = "main",
+                sound = oldMain?.sound,
+                gain = oldMain?.gain ?: 1.0f
+            )
+        )
+
+        // Zona Tepi (crescent)
+        val crescentCount = targetCount - 1
+        for (i in 0 until crescentCount) {
+            val zoneId = "bass-${i + 2}"
+            val oldZone = oldZoneMap[zoneId]
+            newZones.add(
+                com.vrkendang.kitcore.model.ZoneData(
+                    id = zoneId,
+                    region = "crescent",
+                    band = i,
+                    sound = oldZone?.sound,
+                    gain = oldZone?.gain ?: 1.0f
+                )
+            )
+        }
+
+        // Tentukan default splits sesuai jumlah zona crescent
+        val defaultSplits = when (crescentCount) {
+            2 -> listOf(0.50f)
+            3 -> listOf(0.333f, 0.667f)
+            4 -> listOf(0.25f, 0.50f, 0.75f)
+            else -> emptyList()
+        }
+
+        val curDiv = bassDrum.divider ?: DividerData(dx = -0.30f, dy = 0.0f, r = 0.80f)
+        val updatedDiv = curDiv.copy(
+            splits = if (crescentCount > 1) (curDiv.splits?.takeIf { it.size == crescentCount - 1 } ?: defaultSplits) else emptyList()
+        )
+
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.model == "bass") {
+                drum.copy(
+                    divider = updatedDiv,
+                    zones = newZones
+                )
+            } else drum
+        }
+
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Mengubah posisi garis sekat tertentu pada zona crescent Bass.
+     */
+    fun updateBassSplit(splitIndex: Int, newSplitPos: Float): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val bassDrum = kit.drums.firstOrNull { it.model == "bass" } ?: return kit
+        val div = bassDrum.divider ?: return kit
+        val crescentCount = bassDrum.zones.count { it.region == "crescent" }
+        if (crescentCount <= 1) return kit
+
+        val defaultSplits = when (crescentCount) {
+            2 -> listOf(0.50f)
+            3 -> listOf(0.333f, 0.667f)
+            4 -> listOf(0.25f, 0.50f, 0.75f)
+            else -> emptyList()
+        }
+
+        val splitsList = (div.splits?.takeIf { it.size == crescentCount - 1 } ?: defaultSplits).toMutableList()
+        if (splitIndex !in splitsList.indices) return kit
+
+        val minBound = if (splitIndex > 0) splitsList[splitIndex - 1] + 0.05f else 0.05f
+        val maxBound = if (splitIndex < splitsList.size - 1) splitsList[splitIndex + 1] - 0.05f else 0.95f
+        val clamped = newSplitPos.coerceIn(minBound, maxBound)
+
+        splitsList[splitIndex] = clamped
+
+        val updatedDiv = div.copy(splits = splitsList)
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.model == "bass") {
+                drum.copy(divider = updatedDiv)
+            } else drum
+        }
+
         val updated = kit.copy(drums = updatedDrums)
         writeKitJsonToDisk(updated)
         workingKit = updated

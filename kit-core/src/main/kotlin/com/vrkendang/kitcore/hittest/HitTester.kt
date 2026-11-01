@@ -66,9 +66,10 @@ object HitTester {
 
     /**
      * Evaluasi hit model bass:
-     * - C_div (busur pembatas): pusat (cx + dx*rx, cy + dy*ry), radius r*rx
-     * - main (Bass-1): di dalam oval DAN di dalam C_div
-     * - crescent (Bass-2..5): di dalam oval DAN di luar C_div, dibagi 4 band vertikal (0-3 dari atas ke bawah)
+     * - Jika hanya ada 1 zona di Bass, seluruh permukaan kendang memicu zona tersebut.
+     * - C_div (busur oval pembatas): pusat (cx + dx*rx, cy + dy*ry), radius rx*rx dan ry*ry
+     * - main (Bass-1): di dalam oval Bass DAN di dalam C_div
+     * - crescent (zona tepi): di dalam oval Bass DAN di luar C_div, dibagi sesuai parameter splits
      */
     private fun findBassZone(
         drum: DrumData,
@@ -79,28 +80,54 @@ object HitTester {
         rx: Float,
         ry: Float
     ): ZoneData? {
+        if (drum.zones.size <= 1) {
+            return drum.zones.firstOrNull()
+        }
+
         val divider = drum.divider ?: return drum.zones.firstOrNull()
 
         val divCenterXu = cxu + (divider.dx * rx)
         val divCenterYu = cyu + (divider.dy * ry)
-        val divRadius = divider.r * rx
+        val divRx = divider.effectiveRx * rx
+        val divRy = divider.effectiveRy * ry
 
-        val dDivX = xu - divCenterXu
-        val dDivY = yu - divCenterYu
-        val inDiv = (dDivX * dDivX + dDivY * dDivY) <= (divRadius * divRadius)
+        val normX = if (divRx > 0f) (xu - divCenterXu) / divRx else 0f
+        val normY = if (divRy > 0f) (yu - divCenterYu) / divRy else 0f
+        val inDiv = (normX * normX + normY * normY) <= 1.0f
 
         return if (inDiv) {
             // Area utama (main / Bass-1)
-            drum.zones.firstOrNull { it.region == "main" }
+            drum.zones.firstOrNull { it.region == "main" } ?: drum.zones.firstOrNull()
         } else {
-            // Area bulan sabit (crescent / Bass-2..5)
-            // Membagi tinggi oval Bass [cyu - ry, cyu + ry] menjadi 4 band vertikal
+            // Area bulan sabit (crescent)
+            val crescentZones = drum.zones.filter { it.region == "crescent" }
+            if (crescentZones.isEmpty()) {
+                return drum.zones.firstOrNull()
+            }
+            if (crescentZones.size == 1) {
+                return crescentZones.first()
+            }
+
             val top = cyu - ry
             val totalHeight = 2.0f * ry
-            val normalizedY = if (totalHeight > 0f) (yu - top) / totalHeight else 0f
-            val bandIndex = (normalizedY * 4.0f).toInt().coerceIn(0, 3)
+            val normalizedY = if (totalHeight > 0f) ((yu - top) / totalHeight).coerceIn(0f, 1f) else 0f
 
-            drum.zones.firstOrNull { it.region == "crescent" && it.band == bandIndex }
+            val splits = divider.splits
+            val bandIndex = if (splits != null && splits.isNotEmpty()) {
+                var idx = 0
+                for (s in splits) {
+                    if (normalizedY >= s) {
+                        idx++
+                    } else {
+                        break
+                    }
+                }
+                idx.coerceIn(0, crescentZones.size - 1)
+            } else {
+                (normalizedY * crescentZones.size).toInt().coerceIn(0, crescentZones.size - 1)
+            }
+
+            crescentZones.getOrNull(bandIndex) ?: crescentZones.last()
         }
     }
 

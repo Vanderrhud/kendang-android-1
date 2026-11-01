@@ -374,25 +374,9 @@ class KendangBoardView @JvmOverloads constructor(
             val rx = baseRx * pulseScale
             val ry = baseRy * pulseScale
 
+            // Kulit kendang alami tanpa tempelan plak kosmetik
             val ovalRect = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
-
-            // Isi kulit kendang warna krem/kulit alami
             canvas.drawOval(ovalRect, drumSkinPaint)
-
-            // Aksen hitam tengah khas kendang pada Bass atau titik tengah tipis
-            if (drum.model == "bass") {
-                val divider = drum.divider
-                if (divider != null) {
-                    val ovalPath = Path().apply { addOval(ovalRect, Path.Direction.CW) }
-                    val divCenterX = cx + (divider.dx * rx)
-                    val divCenterY = cy + (divider.dy * ry)
-                    val divRadius = divider.r * rx
-                    canvas.save()
-                    canvas.clipPath(ovalPath)
-                    canvas.drawCircle(divCenterX, divCenterY, divRadius, drumCenterPatchPaint)
-                    canvas.restore()
-                }
-            }
 
             // Cincin dalam untuk aksen drumhead
             val innerRect = RectF(cx - rx * 0.92f, cy - ry * 0.92f, cx + rx * 0.92f, cy + ry * 0.92f)
@@ -483,39 +467,49 @@ class KendangBoardView @JvmOverloads constructor(
             when (drum.model) {
                 "bass" -> {
                     val divider = drum.divider
-                    if (divider != null) {
+                    if (divider != null && drum.zones.size > 1) {
                         val divCenterX = cx + (divider.dx * rx)
                         val divCenterY = cy + (divider.dy * ry)
-                        val divRadius = divider.r * rx
+                        val divRx = divider.effectiveRx * rx
+                        val divRy = divider.effectiveRy * ry
+                        val divOvalRect = RectF(divCenterX - divRx, divCenterY - divRy, divCenterX + divRx, divCenterY + divRy)
 
                         canvas.save()
                         canvas.clipPath(ovalPath)
 
-                        // Garis pemisah 4 bilah bulan sabit terlebih dahulu (di luar C_div)
-                        val circlePath = Path().apply {
-                            addCircle(divCenterX, divCenterY, divRadius, Path.Direction.CW)
+                        val divOvalPath = Path().apply {
+                            addOval(divOvalRect, Path.Direction.CW)
                         }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                            canvas.save()
-                            canvas.clipOutPath(circlePath)
-                            val top = cy - ry
-                            val bandHeight = (2f * ry) / 4f
-                            for (i in 1..3) {
-                                val y = top + i * bandHeight
-                                canvas.drawLine(cx - rx, y, cx + rx, y, guideBandPaint)
+
+                        val crescentZones = drum.zones.filter { it.region == "crescent" }
+                        if (crescentZones.size > 1) {
+                            val splits = divider.splits ?: when (crescentZones.size) {
+                                2 -> listOf(0.5f)
+                                3 -> listOf(0.333f, 0.667f)
+                                4 -> listOf(0.25f, 0.50f, 0.75f)
+                                else -> emptyList()
                             }
-                            canvas.restore()
-                        } else {
+
                             val top = cy - ry
-                            val bandHeight = (2f * ry) / 4f
-                            for (i in 1..3) {
-                                val y = top + i * bandHeight
-                                canvas.drawLine(cx - rx, y, cx + rx, y, guideBandPaint)
+                            val totalHeight = 2f * ry
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                                canvas.save()
+                                canvas.clipOutPath(divOvalPath)
+                                for (split in splits) {
+                                    val y = top + split * totalHeight
+                                    canvas.drawLine(cx - rx, y, cx + rx, y, guideBandPaint)
+                                }
+                                canvas.restore()
+                            } else {
+                                for (split in splits) {
+                                    val y = top + split * totalHeight
+                                    canvas.drawLine(cx - rx, y, cx + rx, y, guideBandPaint)
+                                }
                             }
                         }
 
-                        // Garis busur C_div utama
-                        canvas.drawCircle(divCenterX, divCenterY, divRadius, guideArcPaint)
+                        // Garis busur oval C_div utama
+                        canvas.drawOval(divOvalRect, guideArcPaint)
                         canvas.restore()
                     }
                 }
@@ -573,37 +567,53 @@ class KendangBoardView @JvmOverloads constructor(
                 }
             }
             "bass" -> {
+                if (drum.zones.size <= 1) return Pair(cx, cy)
                 val divider = drum.divider ?: return Pair(cx, cy)
                 val divCx = cx + divider.dx * rx
                 val divCy = cy + divider.dy * ry
-                val divR = divider.r * rx
+                val divRx = divider.effectiveRx * rx
+                val divRy = divider.effectiveRy * ry
 
                 if (zone.region == "main") {
-                    // Titik tengah irisan oval Bass dan lingkaran C_div pada garis horizontal cy
                     val ovalLeft = cx - rx * 0.85f
                     val ovalRight = cx + rx * 0.85f
                     val dyDiv = cy - divCy
-                    val halfChord = if (kotlin.math.abs(dyDiv) < divR) {
-                        sqrt(max(0f, divR * divR - dyDiv * dyDiv))
+                    val halfChord = if (divRy > 0f && kotlin.math.abs(dyDiv) < divRy) {
+                        divRx * sqrt(max(0f, 1f - (dyDiv * dyDiv) / (divRy * divRy)))
                     } else {
-                        divR * 0.5f
+                        divRx * 0.5f
                     }
                     val left = max(ovalLeft, divCx - halfChord)
                     val right = min(ovalRight, divCx + halfChord)
                     val midX = if (right > left) (left + right) * 0.5f else cx - rx * 0.25f
                     Pair(midX, cy)
                 } else {
-                    val bandIndex = (zone.band ?: 0).coerceIn(0, 3)
-                    val bandHeight = (2f * ry) / 4f
-                    val bandCy = (cy - ry) + (bandIndex + 0.5f) * bandHeight
+                    val crescentZones = drum.zones.filter { it.region == "crescent" }
+                    val bandIndex = crescentZones.indexOfFirst { it.id == zone.id }.coerceAtLeast(0)
+                    val splits = divider.splits ?: when (crescentZones.size) {
+                        2 -> listOf(0.5f)
+                        3 -> listOf(0.333f, 0.667f)
+                        4 -> listOf(0.25f, 0.50f, 0.75f)
+                        else -> emptyList()
+                    }
+                    val splitRanges = mutableListOf<Pair<Float, Float>>()
+                    var prev = 0f
+                    for (s in splits) {
+                        splitRanges.add(Pair(prev, s))
+                        prev = s
+                    }
+                    splitRanges.add(Pair(prev, 1f))
+
+                    val (y0, y1) = splitRanges.getOrNull(bandIndex) ?: Pair(0f, 1f)
+                    val bandCy = (cy - ry) + ((y0 + y1) * 0.5f) * (2f * ry)
                     val dyNorm = ((bandCy - cy) / ry).coerceIn(-0.95f, 0.95f)
                     val ovalHalfW = rx * sqrt(max(0f, 1f - dyNorm * dyNorm))
                     val ovalLeft = cx - ovalHalfW
                     val ovalRight = cx + ovalHalfW
 
                     val dyDiv = bandCy - divCy
-                    if (kotlin.math.abs(dyDiv) < divR) {
-                        val divHalfW = sqrt(max(0f, divR * divR - dyDiv * dyDiv))
+                    if (divRy > 0f && kotlin.math.abs(dyDiv) < divRy) {
+                        val divHalfW = divRx * sqrt(max(0f, 1f - (dyDiv * dyDiv) / (divRy * divRy)))
                         val divLeft = divCx - divHalfW
                         val divRight = divCx + divHalfW
                         val leftSegWidth = max(0f, min(ovalRight, divLeft) - ovalLeft)

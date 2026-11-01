@@ -83,6 +83,11 @@ object ZoneHighlightDrawer {
             }
 
             "bass" -> {
+                if (drum.zones.size <= 1) {
+                    canvas.drawOval(drumOval, highlightPaint)
+                    return
+                }
+
                 val divider = drum.divider
                 if (divider == null) {
                     canvas.drawOval(drumOval, highlightPaint)
@@ -91,33 +96,49 @@ object ZoneHighlightDrawer {
 
                 val divCenterX = cx + (divider.dx * rx)
                 val divCenterY = cy + (divider.dy * ry)
-                val divRadius = divider.r * rx
+                val divRx = divider.effectiveRx * rx
+                val divRy = divider.effectiveRy * ry
 
-                val circlePath = Path().apply {
-                    addCircle(divCenterX, divCenterY, divRadius, Path.Direction.CW)
+                val divOvalRect = RectF(divCenterX - divRx, divCenterY - divRy, divCenterX + divRx, divCenterY + divRy)
+                val divOvalPath = Path().apply {
+                    addOval(divOvalRect, Path.Direction.CW)
                 }
 
                 if (zone.region == "main") {
-                    // Bass-1: di dalam oval Bass DAN di dalam lingkaran C_div
                     canvas.save()
-                    canvas.clipPath(circlePath)
+                    canvas.clipPath(divOvalPath)
                     canvas.drawOval(drumOval, highlightPaint)
                     canvas.restore()
                 } else {
-                    // Bass-2..5: di dalam oval Bass DAN di luar C_div, terpotong band vertikal
-                    val bandIndex = (zone.band ?: 0).coerceIn(0, 3)
+                    val crescentZones = drum.zones.filter { it.region == "crescent" }
+                    val bandIndex = crescentZones.indexOfFirst { it.id == zone.id }.coerceAtLeast(0)
+                    val splits = divider.splits ?: when (crescentZones.size) {
+                        2 -> listOf(0.5f)
+                        3 -> listOf(0.333f, 0.667f)
+                        4 -> listOf(0.25f, 0.50f, 0.75f)
+                        else -> emptyList()
+                    }
+                    val splitRanges = mutableListOf<Pair<Float, Float>>()
+                    var prev = 0f
+                    for (s in splits) {
+                        splitRanges.add(Pair(prev, s))
+                        prev = s
+                    }
+                    splitRanges.add(Pair(prev, 1f))
+
+                    val (y0, y1) = splitRanges.getOrNull(bandIndex) ?: Pair(0f, 1f)
                     val top = cy - ry
-                    val bandHeight = (2f * ry) / 4f
-                    val bandTop = top + bandIndex * bandHeight
-                    val bandBottom = bandTop + bandHeight
+                    val totalHeight = 2f * ry
+                    val bandTop = top + y0 * totalHeight
+                    val bandBottom = top + y1 * totalHeight
 
                     canvas.save()
                     canvas.clipRect(cx - rx, bandTop, cx + rx, bandBottom)
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        canvas.clipOutPath(circlePath)
+                        canvas.clipOutPath(divOvalPath)
                     } else {
                         @Suppress("DEPRECATION")
-                        canvas.clipPath(circlePath, android.graphics.Region.Op.DIFFERENCE)
+                        canvas.clipPath(divOvalPath, android.graphics.Region.Op.DIFFERENCE)
                     }
                     canvas.drawOval(drumOval, highlightPaint)
                     canvas.restore()

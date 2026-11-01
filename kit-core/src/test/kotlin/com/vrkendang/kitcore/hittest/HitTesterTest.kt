@@ -149,4 +149,78 @@ class HitTesterTest {
         assertNotNull(hitBA)
         assertEquals("zone-B", hitBA.id)
     }
+
+    @Test
+    fun testBassSingleZoneCoversFullDrum() {
+        val bass1Zone = DrumData(
+            id = "bass",
+            model = "bass",
+            center = Point(0.25f, 0.55f),
+            radius = Radius(0.30f, 0.30f),
+            zones = listOf(ZoneData(id = "bass-1", region = "main"))
+        )
+        val kitSingle = KitData(
+            kitId = "single-bass",
+            name = "Single Bass",
+            canvasAspect = 2.0f,
+            drums = listOf(bass1Zone)
+        )
+
+        // Titik tengah
+        val hitCenter = HitTester.findZone(kitSingle, 0.25f, 0.55f)
+        assertNotNull(hitCenter)
+        assertEquals("bass-1", hitCenter.id)
+
+        // Titik tepi (yang tadinya crescent)
+        val hitEdge = HitTester.findZone(kitSingle, 0.35f, 0.35f)
+        assertNotNull(hitEdge)
+        assertEquals("bass-1", hitEdge.id, "Bass dengan 1 zona harus memicu bass-1 di seluruh permukaan")
+    }
+
+    @Test
+    fun testBassOvalDividerAndCustomSplits() {
+        // Bass dengan oval rx=0.50, ry=0.90 (oval meninggi vertikal) dan 2 splits (3 zona crescent, total 4 zona)
+        val bassOval = DrumData(
+            id = "bass",
+            model = "bass",
+            center = Point(0.25f, 0.55f),
+            radius = Radius(0.30f, 0.30f),
+            divider = DividerData(
+                dx = 0.0f,
+                dy = 0.0f,
+                r = 0.50f,
+                rx = 0.40f,
+                ry = 0.80f,
+                splits = listOf(0.30f, 0.70f)
+            ),
+            zones = listOf(
+                ZoneData(id = "bass-1", region = "main"),
+                ZoneData(id = "bass-2", region = "crescent", band = 0),
+                ZoneData(id = "bass-3", region = "crescent", band = 1),
+                ZoneData(id = "bass-4", region = "crescent", band = 2)
+            )
+        )
+        val kitOval = KitData(
+            kitId = "oval-bass",
+            name = "Oval Bass",
+            canvasAspect = 2.0f,
+            drums = listOf(bassOval)
+        )
+
+        // Pusat: x=0.25, y=0.55 -> harus bass-1
+        val hitCenter = HitTester.findZone(kitOval, 0.25f, 0.55f)
+        assertNotNull(hitCenter)
+        assertEquals("bass-1", hitCenter.id)
+
+        // Tepi kanan atas: Y < 0.30 split -> bass-2 (band 0)
+        // Y rentang [0.25, 0.85], total 0.60. Y = 0.25 + 0.15*0.60 = 0.34
+        val hitTop = HitTester.findZone(kitOval, 0.32f, 0.35f)
+        assertNotNull(hitTop)
+        assertEquals("crescent", hitTop.region)
+
+        // Tepi tengah: 0.30 <= normalizedY < 0.70 -> bass-3 (band 1)
+        val hitMid = HitTester.findZone(kitOval, 0.36f, 0.55f)
+        assertNotNull(hitMid)
+        assertEquals("bass-3", hitMid.id)
+    }
 }

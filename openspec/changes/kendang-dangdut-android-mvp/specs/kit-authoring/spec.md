@@ -129,15 +129,27 @@ Developer SHALL dapat mengatur nilai gain (volume) per zona di rentang 0.0–2.0
 - **WHEN** developer mengubah nilai gain suatu zona
 - **THEN** perubahan volume terdengar saat zona diketuk berikutnya tanpa memuat ulang file sample
 
-### Requirement: Ubah parameter busur pembatas Bass (divider)
-Developer SHALL dapat menyesuaikan parameter busur pembatas Bass (`dx`, `dy`, `r`) secara interaktif untuk mengkalibrasi batas antara zona utama dan zona bulan sabit kendang Bass. Nilai divider SHALL mengikuti rentang validasi `kit-data`: `dx` dan `dy` di rentang -3.0 sampai 3.0, serta `r` > 0 dan ≤ 3.0. Nilai di luar rentang SHALL ditolak dengan pesan jelas.
+### Requirement: Ubah parameter busur pembatas Bass (divider), bentuk oval, dan jumlah zona aktif
+Developer SHALL dapat menyesuaikan jumlah zona aktif kendang Bass (1 sampai 5 zona) serta menyesuaikan parameter geometri pembatas Bass secara interaktif dan modular per zona terpilih:
+1. Pemilihan jumlah zona (1–5 zona) secara dinamis mengaktifkan/menyembunyikan zona Bass terkait (`bass-1` s/d `bass-5`) tanpa menghilangkan sound dan gain zona yang telah dipasang.
+2. Saat zona utama (`bass-1`) dipilih, antarmuka menyediakan kontrol bentuk oval bebas (`dx`, `dy`, `rx`, `ry`) di rentang validasi `kit-data` (`dx`/`dy` -3.0 s.d. 3.0, `rx`/`ry` 0.1 s.d. 3.0).
+3. Saat zona tepi (`bass-2` s.d. `bass-5`) dipilih, antarmuka menyediakan kontrol khusus posisi sekat pembatas zona tersebut secara independen tanpa tercampur dengan parameter oval `bass-1`.
+4. Permukaan kendang Bass SHALL tampil sebagai kulit alami bersih tanpa tempelan plak hitam kosmetik; garis oval dan sekat pembatas hanya tampil sebagai garis panduan visual tipis selama proses konfigurasi/kalibrasi.
 
-#### Scenario: Perubahan parameter divider langsung terlihat di papan
-- **WHEN** developer mengubah parameter divider Bass
-- **THEN** garis panduan busur pembatas di layar berubah mengikuti nilai baru secara real-time
+#### Scenario: Perubahan parameter oval bass-1 langsung terlihat di papan
+- **WHEN** developer memilih `bass-1` dan mengubah parameter oval `dx`, `dy`, `rx`, atau `ry`
+- **THEN** garis panduan oval pembatas di layar berubah mengikuti nilai baru secara real-time tanpa tercampur dengan kontrol sekat zona tepi
+
+#### Scenario: Perubahan posisi sekat zona tepi bass-2
+- **WHEN** developer memilih `bass-2` dan mengubah slider posisi sekat
+- **THEN** garis sekat pembatas zona tersebut bergeser naik/turun di kanvas preview secara real-time
+
+#### Scenario: Mengubah jumlah zona aktif Bass menjadi 3 zona
+- **WHEN** developer memilih tombol `3` pada pemilih jumlah zona Bass
+- **THEN** kendang Bass memiliki 3 zona aktif (`bass-1`, `bass-2`, `bass-3`) dengan suara dan gain tersimpan tetap terjaga, serta zona yang tidak aktif disembunyikan dari daftar chip
 
 #### Scenario: Parameter divider di luar rentang ditolak
-- **WHEN** developer memasukkan nilai `dx`/`dy` di luar -3.0 sampai 3.0 atau `r` ≤ 0 atau > 3.0
+- **WHEN** developer memasukkan nilai `dx`/`dy` di luar -3.0 sampai 3.0 atau `rx`/`ry` ≤ 0 atau > 3.0
 - **THEN** perubahan ditolak dengan pesan galat yang jelas dan nilai divider sebelumnya tetap dipakai
 
 ### Requirement: Simpan edit kit saat ini di dalam aplikasi (`✓ Simpan`) dan Ekspor paket `.vrkendang` terpisah (`Ekspor`)

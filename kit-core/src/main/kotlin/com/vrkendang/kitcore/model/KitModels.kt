@@ -18,8 +18,14 @@ data class Radius(
 data class DividerData(
     val dx: Float,
     val dy: Float,
-    val r: Float
-)
+    val r: Float = 0.80f,
+    val rx: Float? = null,
+    val ry: Float? = null,
+    val splits: List<Float>? = null
+) {
+    val effectiveRx: Float get() = rx ?: r
+    val effectiveRy: Float get() = ry ?: r
+}
 
 @Serializable
 data class ZoneData(

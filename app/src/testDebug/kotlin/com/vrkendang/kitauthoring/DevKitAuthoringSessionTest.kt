@@ -181,4 +181,48 @@ class DevKitAuthoringSessionTest {
             tempInternalKitsDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun testSetBassZoneCountAndOvalDivider() {
+        val tempDir = File.createTempFile("dev-session-bass-zones", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-bass-zones", "Test Bass Zones", null)
+
+            // 1. Ubah jumlah zona Bass ke 3 zona
+            val kit3 = session.setBassZoneCount(3)
+            val bass3 = kit3.drums.first { it.id == "bass" }
+            assertEquals(3, bass3.zones.size)
+            assertEquals(listOf("bass-1", "bass-2", "bass-3"), bass3.zones.map { it.id })
+
+            // 2. Ubah parameter oval Bass
+            val kitOval = session.updateBassDivider(
+                dx = -0.2f,
+                dy = 0.1f,
+                r = 0.7f,
+                rx = 0.6f,
+                ry = 0.9f
+            )
+            val div = kitOval.drums.first { it.id == "bass" }.divider
+            assertNotNull(div)
+            assertEquals(-0.2f, div.dx)
+            assertEquals(0.1f, div.dy)
+            assertEquals(0.6f, div.effectiveRx)
+            assertEquals(0.9f, div.effectiveRy)
+
+            // 3. Ubah posisi sekat (untuk 3 zona, crescentCount=2, splits punya 1 entri pada index 0)
+            val kitSplit = session.updateBassSplit(0, 0.40f)
+            val divSplit = kitSplit.drums.first { it.id == "bass" }.divider
+            assertNotNull(divSplit)
+            assertEquals(listOf(0.40f), divSplit.splits)
+
+            // 4. Ubah jumlah zona Bass ke 1 zona
+            val kit1 = session.setBassZoneCount(1)
+            val bass1 = kit1.drums.first { it.id == "bass" }
+            assertEquals(1, bass1.zones.size)
+            assertEquals("bass-1", bass1.zones.first().id)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

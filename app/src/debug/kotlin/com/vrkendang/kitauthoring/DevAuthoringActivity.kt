@@ -421,6 +421,54 @@ class DevAuthoringActivity : Activity() {
         }
         rightContainer.addView(titleTv)
 
+        // Pemilih Jumlah Zona Bass (1 s/d 5 Zona Bebas)
+        if (drum.model == "bass") {
+            val countRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, (4 * density).toInt())
+            }
+            val countLabel = TextView(this).apply {
+                text = "Jumlah Zona:"
+                textSize = 10f
+                setTextColor(Color.parseColor("#A89F96"))
+                setPadding(0, 0, (6 * density).toInt(), 0)
+            }
+            countRow.addView(countLabel)
+
+            for (c in 1..5) {
+                val isSelectedCount = (drum.zones.size == c)
+                val cBtn = Button(this).apply {
+                    text = "$c"
+                    textSize = 10f
+                    paint.isFakeBoldText = true
+                    setTextColor(Color.parseColor(if (isSelectedCount) "#14110F" else "#E0D8D0"))
+                    background = GradientDrawable().apply {
+                        setColor(Color.parseColor(if (isSelectedCount) "#FFB74D" else "#2B2520"))
+                        cornerRadius = 4f * density
+                        setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(if (isSelectedCount) "#FFA726" else "#4A3F37"))
+                    }
+                    layoutParams = LinearLayout.LayoutParams((28 * density).toInt(), (22 * density).toInt()).apply {
+                        marginEnd = (4 * density).toInt()
+                    }
+                    setPadding(0, 0, 0, 0)
+                    setOnClickListener {
+                        if (drum.zones.size != c) {
+                            val updated = session.setBassZoneCount(c)
+                            activateKitAudio(updated)
+                            previewBoard.kit = updated
+                            selectedZoneId = updated.drums.first { it.id == "bass" }.zones.first().id
+                            previewBoard.selectedZoneId = selectedZoneId
+                            refreshHeaderStatus()
+                            populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+                        }
+                    }
+                }
+                countRow.addView(cBtn)
+            }
+            rightContainer.addView(countRow)
+        }
+
         // 1. Baris Chip Zona (1 Baris Rapi)
         val zoneChipsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -579,85 +627,187 @@ class DevAuthoringActivity : Activity() {
 
         rightContainer.addView(audioBox)
 
-        // 3. Kotak Parameter Busur Bass (Khusus saat Bass dipilih — Muat Tanpa Scroll!)
-        if (drum.model == "bass" && drum.divider != null) {
+        // 3. Kotak Parameter Geometri Eksklusif per Zona Terpilih (Khusus Bass)
+        if (drum.model == "bass" && drum.zones.size > 1 && drum.divider != null) {
             val divider = drum.divider!!
-            val bassBox = createCompactBox()
 
-            val bassHeaderRow = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, 0, 0, (2 * density).toInt())
-            }
+            if (selectedZoneId == "bass-1") {
+                // Parameter Bentuk Oval untuk Zona Utama (bass-1)
+                val bassBox = createCompactBox()
 
-            val bassTitle = TextView(this).apply {
-                text = "PARAMETER BUSUR BASS"
-                textSize = 10f
-                setTextColor(Color.parseColor("#A89F96"))
-                paint.isFakeBoldText = true
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
-            }
-            bassHeaderRow.addView(bassTitle)
-
-            val resetArcBtn = Button(this).apply {
-                text = "↺ Reset"
-                textSize = 9.5f
-                setTextColor(Color.parseColor("#E0D8D0"))
-                isAllCaps = false
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#2B2520"))
-                    cornerRadius = 5f * density
-                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#4A3F37"))
+                val bassHeaderRow = LinearLayout(this).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(0, 0, 0, (2 * density).toInt())
                 }
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    (22 * density).toInt()
+
+                val bassTitle = TextView(this).apply {
+                    text = "PARAMETER OVAL: BASS-1 (UTAMA)"
+                    textSize = 10f
+                    setTextColor(Color.parseColor("#A89F96"))
+                    paint.isFakeBoldText = true
+                    layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+                }
+                bassHeaderRow.addView(bassTitle)
+
+                val resetArcBtn = Button(this).apply {
+                    text = "↺ Reset"
+                    textSize = 9.5f
+                    setTextColor(Color.parseColor("#E0D8D0"))
+                    isAllCaps = false
+                    background = GradientDrawable().apply {
+                        setColor(Color.parseColor("#2B2520"))
+                        cornerRadius = 5f * density
+                        setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#4A3F37"))
+                    }
+                    layoutParams = LinearLayout.LayoutParams(
+                        LinearLayout.LayoutParams.WRAP_CONTENT,
+                        (22 * density).toInt()
+                    )
+                    setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+                    setOnClickListener {
+                        val updated = session.updateBassDivider(
+                            dx = -0.30f,
+                            dy = 0.0f,
+                            r = 0.80f,
+                            rx = 0.80f,
+                            ry = 0.80f
+                        )
+                        previewBoard.kit = updated
+                        refreshHeaderStatus()
+                        populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+                    }
+                }
+                bassHeaderRow.addView(resetArcBtn)
+                bassBox.addView(bassHeaderRow)
+
+                bassBox.addView(
+                    buildCompactDividerSlider("Geser X (dx)", divider.dx, -3.0f, 3.0f) { newDx ->
+                        val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
+                        runCatching {
+                            val updated = session.updateBassDivider(
+                                dx = newDx,
+                                dy = curDiv.dy,
+                                r = curDiv.r,
+                                rx = curDiv.effectiveRx,
+                                ry = curDiv.effectiveRy
+                            )
+                            previewBoard.kit = updated
+                            refreshHeaderStatus()
+                        }
+                    }
                 )
-                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
-                setOnClickListener {
-                    val updated = session.updateBassDivider(-0.30f, 0.0f, 0.80f)
-                    previewBoard.kit = updated
-                    refreshHeaderStatus()
-                    populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+
+                bassBox.addView(
+                    buildCompactDividerSlider("Geser Y (dy)", divider.dy, -3.0f, 3.0f) { newDy ->
+                        val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
+                        runCatching {
+                            val updated = session.updateBassDivider(
+                                dx = curDiv.dx,
+                                dy = newDy,
+                                r = curDiv.r,
+                                rx = curDiv.effectiveRx,
+                                ry = curDiv.effectiveRy
+                            )
+                            previewBoard.kit = updated
+                            refreshHeaderStatus()
+                        }
+                    }
+                )
+
+                bassBox.addView(
+                    buildCompactDividerSlider("Lebar (rx)", divider.effectiveRx, 0.10f, 3.0f) { newRx ->
+                        val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
+                        runCatching {
+                            val updated = session.updateBassDivider(
+                                dx = curDiv.dx,
+                                dy = curDiv.dy,
+                                r = newRx,
+                                rx = newRx,
+                                ry = curDiv.effectiveRy
+                            )
+                            previewBoard.kit = updated
+                            refreshHeaderStatus()
+                        }
+                    }
+                )
+
+                bassBox.addView(
+                    buildCompactDividerSlider("Tinggi (ry)", divider.effectiveRy, 0.10f, 3.0f) { newRy ->
+                        val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
+                        runCatching {
+                            val updated = session.updateBassDivider(
+                                dx = curDiv.dx,
+                                dy = curDiv.dy,
+                                r = curDiv.effectiveRx,
+                                rx = curDiv.effectiveRx,
+                                ry = newRy
+                            )
+                            previewBoard.kit = updated
+                            refreshHeaderStatus()
+                        }
+                    }
+                )
+
+                rightContainer.addView(bassBox)
+            } else {
+                // Parameter Batas Sekat untuk Zona Tepi (bass-2, bass-3, dst.)
+                val crescentZones = drum.zones.filter { it.region == "crescent" }
+                val cIdx = crescentZones.indexOfFirst { it.id == selectedZoneId }
+
+                if (crescentZones.size > 1 && cIdx >= 0) {
+                    val sekatBox = createCompactBox()
+
+                    val sekatHeaderRow = LinearLayout(this).apply {
+                        orientation = LinearLayout.HORIZONTAL
+                        gravity = Gravity.CENTER_VERTICAL
+                        setPadding(0, 0, 0, (2 * density).toInt())
+                    }
+
+                    val sekatTitle = TextView(this).apply {
+                        text = "BATAS SEKAT: ${selectedZoneId.uppercase()}"
+                        textSize = 10f
+                        setTextColor(Color.parseColor("#A89F96"))
+                        paint.isFakeBoldText = true
+                    }
+                    sekatHeaderRow.addView(sekatTitle)
+                    sekatBox.addView(sekatHeaderRow)
+
+                    val defaultSplits = when (crescentZones.size) {
+                        2 -> listOf(0.50f)
+                        3 -> listOf(0.333f, 0.667f)
+                        4 -> listOf(0.25f, 0.50f, 0.75f)
+                        else -> emptyList()
+                    }
+                    val curSplits = divider.splits?.takeIf { it.size == crescentZones.size - 1 } ?: defaultSplits
+
+                    if (cIdx < crescentZones.size - 1) {
+                        val currentVal = curSplits.getOrNull(cIdx) ?: 0.5f
+                        sekatBox.addView(
+                            buildCompactDividerSlider("Posisi Sekat Bawah", currentVal, 0.05f, 0.95f) { newPos ->
+                                runCatching {
+                                    val updated = session.updateBassSplit(cIdx, newPos)
+                                    previewBoard.kit = updated
+                                    refreshHeaderStatus()
+                                }
+                            }
+                        )
+                    } else if (cIdx > 0) {
+                        val currentVal = curSplits.getOrNull(cIdx - 1) ?: 0.5f
+                        sekatBox.addView(
+                            buildCompactDividerSlider("Posisi Sekat Atas", currentVal, 0.05f, 0.95f) { newPos ->
+                                runCatching {
+                                    val updated = session.updateBassSplit(cIdx - 1, newPos)
+                                    previewBoard.kit = updated
+                                    refreshHeaderStatus()
+                                }
+                            }
+                        )
+                    }
+
+                    rightContainer.addView(sekatBox)
                 }
             }
-            bassHeaderRow.addView(resetArcBtn)
-            bassBox.addView(bassHeaderRow)
-
-            bassBox.addView(
-                buildCompactDividerSlider("Geser X (dx)", divider.dx, -3.0f, 3.0f) { newDx ->
-                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
-                    runCatching {
-                        val updated = session.updateBassDivider(newDx, curDiv.dy, curDiv.r)
-                        previewBoard.kit = updated
-                        refreshHeaderStatus()
-                    }
-                }
-            )
-
-            bassBox.addView(
-                buildCompactDividerSlider("Geser Y (dy)", divider.dy, -3.0f, 3.0f) { newDy ->
-                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
-                    runCatching {
-                        val updated = session.updateBassDivider(curDiv.dx, newDy, curDiv.r)
-                        previewBoard.kit = updated
-                        refreshHeaderStatus()
-                    }
-                }
-            )
-
-            bassBox.addView(
-                buildCompactDividerSlider("Lengkungan (r)", divider.r, 0.10f, 3.0f) { newR ->
-                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
-                    runCatching {
-                        val updated = session.updateBassDivider(curDiv.dx, curDiv.dy, newR)
-                        previewBoard.kit = updated
-                        refreshHeaderStatus()
-                    }
-                }
-            )
-
-            rightContainer.addView(bassBox)
         }
     }
 

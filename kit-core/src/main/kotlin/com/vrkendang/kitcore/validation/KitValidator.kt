@@ -65,15 +65,31 @@ object KitValidator {
             // 3. Validasi Model dan Region
             when (drum.model) {
                 "bass" -> {
-                    if (drum.divider == null) {
-                        errors.add("Drum model 'bass' ('${drum.id}') wajib memiliki objek divider")
-                    } else {
+                    if (drum.zones.isEmpty() || drum.zones.size > 5) {
+                        errors.add("Drum model 'bass' ('${drum.id}') harus memiliki antara 1 sampai 5 zona (ditemukan: ${drum.zones.size})")
+                    }
+                    if (drum.divider == null && drum.zones.size > 1) {
+                        errors.add("Drum model 'bass' ('${drum.id}') dengan lebih dari 1 zona wajib memiliki objek divider")
+                    } else if (drum.divider != null) {
                         val div = drum.divider
                         if (div.dx !in -3.0f..3.0f || div.dy !in -3.0f..3.0f) {
                             errors.add("Parameter divider dx/dy drum '${drum.id}' harus di rentang -3.0..3.0 (ditemukan: dx=${div.dx}, dy=${div.dy})")
                         }
                         if (div.r <= 0.0f || div.r > 3.0f) {
                             errors.add("Parameter divider r drum '${drum.id}' harus > 0.0 dan <= 3.0 (ditemukan: r=${div.r})")
+                        }
+                        if (div.rx != null && (div.rx <= 0.0f || div.rx > 3.0f)) {
+                            errors.add("Parameter divider rx drum '${drum.id}' harus > 0.0 dan <= 3.0 (ditemukan: rx=${div.rx})")
+                        }
+                        if (div.ry != null && (div.ry <= 0.0f || div.ry > 3.0f)) {
+                            errors.add("Parameter divider ry drum '${drum.id}' harus > 0.0 dan <= 3.0 (ditemukan: ry=${div.ry})")
+                        }
+                        if (div.splits != null) {
+                            for ((sIdx, sVal) in div.splits.withIndex()) {
+                                if (sVal !in 0.0f..1.0f) {
+                                    errors.add("Parameter divider split index $sIdx drum '${drum.id}' harus di rentang 0.0..1.0 (ditemukan: $sVal)")
+                                }
+                            }
                         }
                     }
                     for (zone in drum.zones) {
