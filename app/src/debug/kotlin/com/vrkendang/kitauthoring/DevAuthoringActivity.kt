@@ -107,7 +107,8 @@ class DevAuthoringActivity : Activity() {
 
     override fun onStop() {
         super.onStop()
-        runCatching { AudioEngine.pauseStream() }
+        // Penjeda audio ditangani oleh AudioLifecycleManager saat seluruh activity di background,
+        // sehingga audio tetap hidup saat membuka pemilih berkas SAF (REQ_PICK_WAV) maupun saat kembali ke MainActivity.
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -516,6 +517,7 @@ class DevAuthoringActivity : Activity() {
                 Toast.makeText(this, "Zona ${zone.id} belum memiliki suara", Toast.LENGTH_SHORT).show()
             } else {
                 val slot = activeSlotMap[zone.id] ?: 0
+                runCatching { AudioEngine.resumeStream() }
                 AudioEngine.triggerSound(slot, curZone.gain)
             }
         }
@@ -888,6 +890,7 @@ class DevAuthoringActivity : Activity() {
                         renderCurrentModeContent()
                         val gain = res.updatedKit.drums.flatMap { it.zones }
                             .firstOrNull { it.id == selectedZoneId }?.gain ?: 1.0f
+                        runCatching { AudioEngine.resumeStream() }
                         AudioEngine.triggerSound(slot, gain)
                         Toast.makeText(
                             this,

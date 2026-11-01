@@ -14,6 +14,7 @@ import android.view.WindowManager
 import android.widget.ScrollView
 import android.widget.TextView
 import com.vrkendang.audio.AudioEngine
+import com.vrkendang.audio.AudioLifecycleManager
 import com.vrkendang.audio.KitAudioLoader
 import com.vrkendang.repository.AssetManagerKitAssetSource
 import com.vrkendang.repository.FileLayoutOverrideSource
@@ -53,6 +54,9 @@ class MainActivity : Activity() {
         super.onCreate(savedInstanceState)
 
         try {
+            // 0. Pastikan manajemen siklus hidup audio terdaftar ke Application (Task 5.8)
+            AudioLifecycleManager.init(application)
+
             // 1. Kunci layar agar selalu menyala selama aplikasi di foreground (Task 7.4)
             window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
@@ -181,9 +185,8 @@ class MainActivity : Activity() {
 
     override fun onStop() {
         super.onStop()
-        // Hentikan seluruh voice aktif saat masuk background agar tidak ada suara menggantung (Task 5.8)
-        runCatching { AudioEngine.pauseStream() }
-            .onFailure { Log.e(TAG, "Gagal pause stream audio", it) }
+        // Penjeda audio stream ditangani secara terpusat oleh AudioLifecycleManager
+        // agar tidak memutus audio saat bernavigasi ke Mode Developer atau Halaman Pilih Kit.
     }
 
     override fun onDestroy() {

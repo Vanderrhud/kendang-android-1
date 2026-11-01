@@ -62,30 +62,17 @@ class SoundLoaderTest {
     // -------------------------------------------------------------------------
 
     /**
-     * Membangun WAV PCM 16-bit mono sesuai spesifikasi RIFF/WAVE.
-     *
-     * @param sampleRate    Sample rate (Hz), default 44100.
-     * @param samples       Data sampel 16-bit signed little-endian.
-     * @param audioFormat   Format audio (1 = PCM, nilai lain = non-PCM untuk uji penolakan).
-     * @param channels      Jumlah channel (1 = mono, nilai lain untuk uji penolakan).
-     * @param bitsPerSample Bit depth (16 = valid, nilai lain untuk uji penolakan).
+     * Membangun WAV mentah sesuai spesifikasi RIFF/WAVE.
      */
-    private fun buildWav(
+    private fun buildWavRaw(
         sampleRate: Int = 44100,
-        samples: ShortArray = shortArrayOf(100, -100, 200, -200),
+        rawBytes: ByteArray,
         audioFormat: Short = 1,
         channels: Short = 1,
         bitsPerSample: Short = 16
     ): ByteArray {
-        val pcmOut = ByteArrayOutputStream()
-        for (s in samples) {
-            val b = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(s)
-            pcmOut.write(b.array())
-        }
-        val pcmBytes = pcmOut.toByteArray()
-
         val fmtSize  = 16
-        val dataSize = pcmBytes.size
+        val dataSize = rawBytes.size
         val riffSize = 4 + (8 + fmtSize) + (8 + dataSize)
 
         val buf = ByteBuffer.allocate(8 + riffSize).order(ByteOrder.LITTLE_ENDIAN)
@@ -108,9 +95,39 @@ class SoundLoaderTest {
         // data chunk
         buf.put("data".toByteArray(Charsets.US_ASCII))
         buf.putInt(dataSize)
-        buf.put(pcmBytes)
+        buf.put(rawBytes)
 
         return buf.array()
+    }
+
+    /**
+     * Membangun WAV PCM 16-bit mono sesuai spesifikasi RIFF/WAVE.
+     *
+     * @param sampleRate    Sample rate (Hz), default 44100.
+     * @param samples       Data sampel 16-bit signed little-endian.
+     * @param audioFormat   Format audio (1 = PCM, nilai lain = non-PCM untuk uji penolakan).
+     * @param channels      Jumlah channel (1 = mono, nilai lain untuk uji penolakan).
+     * @param bitsPerSample Bit depth (16 = valid, nilai lain untuk uji penolakan).
+     */
+    private fun buildWav(
+        sampleRate: Int = 44100,
+        samples: ShortArray = shortArrayOf(100, -100, 200, -200),
+        audioFormat: Short = 1,
+        channels: Short = 1,
+        bitsPerSample: Short = 16
+    ): ByteArray {
+        val pcmOut = ByteArrayOutputStream()
+        for (s in samples) {
+            val b = ByteBuffer.allocate(2).order(ByteOrder.LITTLE_ENDIAN).putShort(s)
+            pcmOut.write(b.array())
+        }
+        return buildWavRaw(
+            sampleRate = sampleRate,
+            rawBytes = pcmOut.toByteArray(),
+            audioFormat = audioFormat,
+            channels = channels,
+            bitsPerSample = bitsPerSample
+        )
     }
 
     // -------------------------------------------------------------------------
@@ -181,16 +198,16 @@ class SoundLoaderTest {
     }
 
     // -------------------------------------------------------------------------
-    // Test: WAV non-PCM → ditolak
+    // Test: format audio tidak didukung → ditolak
     // -------------------------------------------------------------------------
 
     @Test
-    fun `WAV non-PCM (audioFormat bukan 1) ditolak dengan pesan galat yang jelas`() {
+    fun `WAV codec tidak didukung (misal A-law format 6) ditolak dengan pesan galat yang jelas`() {
         val fake   = FakeAudioEngine()
         val loader = SoundLoader()
 
-        // audioFormat = 3 = IEEE float, bukan PCM standar
-        val wav    = buildWav(audioFormat = 3)
+        // audioFormat = 6 = A-law, bukan format PCM/Float yang didukung
+        val wav    = buildWav(audioFormat = 6)
         val result = loader.load(ByteArrayInputStream(wav), slotIndex = 5, engine = fake)
 
         assertIs<SoundLoader.Result.Failure>(result)
@@ -199,28 +216,28 @@ class SoundLoaderTest {
             result.message.contains("WAV", ignoreCase = true),
             "Pesan galat harus menyebut slot atau konteks WAV"
         )
-        assertEquals(0, fake.callCount, "loadSound tidak boleh dipanggil untuk WAV non-PCM")
+        assertEquals(0, fake.callCount, "loadSound tidak boleh dipanggil untuk format audio tidak didukung")
     }
 
     // -------------------------------------------------------------------------
-    // Test: WAV stereo → ditolak
+    // Test: format channel tidak didukung (>2 channel) → ditolak
     // -------------------------------------------------------------------------
 
     @Test
-    fun `WAV stereo (2 channel) ditolak dengan pesan galat yang jelas`() {
+    fun `WAV multi-channel (lebih dari 2 channel) ditolak dengan pesan galat yang jelas`() {
         val fake   = FakeAudioEngine()
         val loader = SoundLoader()
 
-        val wav    = buildWav(channels = 2)
+        val wav    = buildWav(channels = 3)
         val result = loader.load(ByteArrayInputStream(wav), slotIndex = 7, engine = fake)
 
         assertIs<SoundLoader.Result.Failure>(result)
         assertTrue(result.message.isNotBlank())
-        assertEquals(0, fake.callCount, "loadSound tidak boleh dipanggil untuk WAV stereo")
+        assertEquals(0, fake.callCount, "loadSound tidak boleh dipanggil untuk WAV >2 channel")
     }
 
     // -------------------------------------------------------------------------
-    // Test: WAV bukan 16-bit → ditolak
+    // Test: bit depth tidak didukung → ditolak
     // -------------------------------------------------------------------------
 
     @Test
@@ -235,16 +252,75 @@ class SoundLoaderTest {
         assertEquals(0, fake.callCount)
     }
 
+    // -------------------------------------------------------------------------
+    // Test: Format multi-format universal (Stereo, 24-bit, 32-bit Float) → berhasil dimuat
+    // -------------------------------------------------------------------------
+
     @Test
-    fun `WAV 24-bit ditolak dengan pesan galat yang jelas`() {
-        val fake   = FakeAudioEngine()
+    fun `WAV stereo (2 channel) berhasil dimuat dan di-downmix ke mono`() {
+        val fake   = FakeAudioEngine(returnValue = true)
         val loader = SoundLoader()
 
-        val wav    = buildWav(bitsPerSample = 24)
+        // 4 frame stereo (8 sampel short)
+        val stereoSamples = shortArrayOf(100, 200, -300, -100, 500, 1500, -1000, 1000)
+        val wav = buildWav(channels = 2, bitsPerSample = 16, samples = stereoSamples)
+        val result = loader.load(ByteArrayInputStream(wav), slotIndex = 7, engine = fake)
+
+        assertIs<SoundLoader.Result.Success>(result)
+        assertEquals(1, fake.callCount, "loadSound harus dipanggil")
+        assertEquals(7, fake.lastSlotIndex)
+        assertEquals(4, fake.lastFrameCount, "4 frame stereo harus di-downmix menjadi 4 frame mono")
+        assertEquals(8, fake.lastBufferCapacity, "4 frame x 2 byte = 8 byte DirectByteBuffer")
+    }
+
+    @Test
+    fun `WAV 24-bit PCM berhasil dimuat dan dikonversi ke 16-bit mono`() {
+        val fake   = FakeAudioEngine(returnValue = true)
+        val loader = SoundLoader()
+
+        // 4 sampel 24-bit (12 byte)
+        val samples24 = intArrayOf(0, 1000 shl 8, -1000 shl 8, 8388607)
+        val raw24 = ByteArray(12)
+        for (i in samples24.indices) {
+            val s = samples24[i]
+            val offset = i * 3
+            raw24[offset] = (s and 0xFF).toByte()
+            raw24[offset + 1] = ((s shr 8) and 0xFF).toByte()
+            raw24[offset + 2] = ((s shr 16) and 0xFF).toByte()
+        }
+        val wav = buildWavRaw(channels = 1, bitsPerSample = 24, rawBytes = raw24)
         val result = loader.load(ByteArrayInputStream(wav), slotIndex = 6, engine = fake)
 
-        assertIs<SoundLoader.Result.Failure>(result)
-        assertEquals(0, fake.callCount)
+        assertIs<SoundLoader.Result.Success>(result)
+        assertEquals(1, fake.callCount)
+        assertEquals(6, fake.lastSlotIndex)
+        assertEquals(4, fake.lastFrameCount, "4 sampel 24-bit harus dikonversi menjadi 4 frame 16-bit mono")
+        assertEquals(8, fake.lastBufferCapacity, "4 frame x 2 byte = 8 byte")
+    }
+
+    @Test
+    fun `WAV 32-bit Float berhasil dimuat dan dikonversi ke 16-bit mono`() {
+        val fake   = FakeAudioEngine(returnValue = true)
+        val loader = SoundLoader()
+
+        // 4 float sampel (16 byte)
+        val floats = floatArrayOf(0.0f, 1.0f, -1.0f, 0.5f)
+        val rawFloatBuf = ByteBuffer.allocate(16).order(ByteOrder.LITTLE_ENDIAN)
+        for (f in floats) rawFloatBuf.putFloat(f)
+
+        val wav = buildWavRaw(
+            audioFormat = 3,
+            channels = 1,
+            bitsPerSample = 32,
+            rawBytes = rawFloatBuf.array()
+        )
+        val result = loader.load(ByteArrayInputStream(wav), slotIndex = 5, engine = fake)
+
+        assertIs<SoundLoader.Result.Success>(result)
+        assertEquals(1, fake.callCount)
+        assertEquals(5, fake.lastSlotIndex)
+        assertEquals(4, fake.lastFrameCount, "4 sampel 32-bit float harus dikonversi menjadi 4 frame 16-bit mono")
+        assertEquals(8, fake.lastBufferCapacity, "4 frame x 2 byte = 8 byte")
     }
 
     // -------------------------------------------------------------------------

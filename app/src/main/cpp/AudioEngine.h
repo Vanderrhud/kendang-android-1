@@ -49,11 +49,16 @@ public:
     /**
      * Memulai pemutaran audio stream.
      * Jika stream belum terbuka, method ini akan membukanya terlebih dahulu.
+     * Jika stream berada pada status transisi (Stopping atau Pausing), menunggu hingga
+     * transisi selesai sebelum requestStart. Jika stream gagal dimulai (misal ErrorInvalidState),
+     * melakukan pembukaan ulang bersih secara otomatis.
      */
     bool start();
 
     /**
      * Menghentikan sementara pemutaran audio stream tanpa menutup resource stream.
+     * Menunggu transisi Starting selesai sebelum meminta stop guna mencegah ErrorInvalidState,
+     * serta menghentikan seluruh voice aktif untuk mencegah suara menggantung saat resume.
      */
     void stop();
 

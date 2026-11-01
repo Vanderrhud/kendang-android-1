@@ -128,3 +128,28 @@ Mesin audio SHALL mendeteksi pemutusan stream yang terjadi akibat perubahan pera
 #### Scenario: Resampling ulang saat sample rate stream berubah setelah reconnect
 - **WHEN** stream audio dibuka ulang dengan sample rate berbeda setelah reconnect perangkat audio
 - **THEN** sample audio di-resample ulang dari PCM asli ke sample rate stream yang baru dan suara diputar dengan pitch yang tetap benar
+
+### Requirement: Penguraian format audio WAV universal
+Modul audio Kotlin SHALL mendukung pembacaan dan konversi format audio WAV umum yang mencakup PCM standar (16-bit dan 24-bit), IEEE 32-bit floating point, serta WAVE_FORMAT_EXTENSIBLE (PCM dan IEEE Float), baik dalam konfigurasi mono maupun stereo (2 channel). File stereo SHALL di-downmix secara otomatis ke mono `(L + R) / 2`, dan format non-16-bit SHALL dikonversi secara presisi ke PCM 16-bit bertanda dengan penskalaan, clamping, dan penanganan nilai NaN. Chunk metadata non-audio (seperti `bext`, `LIST`, `acid`, `JUNK`) serta padding RIFF SHALL dilewati secara aman.
+
+#### Scenario: Memuat file audio WAV stereo 2-channel
+- **WHEN** pemain atau developer memuat file audio WAV stereo
+- **THEN** parser audio mengurai kedua channel, menggabungkannya ke mono via averaging `(L + R) / 2`, dan menyerahkan PCM 16-bit mono ke AudioEngine tanpa penolakan
+
+#### Scenario: Memuat file audio WAV 24-bit atau 32-bit float
+- **WHEN** file audio WAV dengan bit depth 24-bit PCM atau 32-bit float dimuat
+- **THEN** parser audio mengonversi sampel ke PCM 16-bit dengan arithmetic shift atau normalisasi clamping [-1.0f, 1.0f] sehingga suara dapat dimainkan dengan akurat
+
+### Requirement: Keamanan transisi status stream audio Oboe dan pemulihan otomatis
+Mesin audio native C++ SHALL menangani transisi status asynchronous Oboe (khususnya status `Stopping` dan `Pausing`) dengan menunggu transisi selesai sebelum mengajukan `requestStart()`, guna mencegah penolakan `ErrorInvalidState`. Jika `requestStart()` mengalami kegagalan, mesin audio SHALL secara otomatis menutup stream bermasalah dan membuka stream baru secara bersih agar pemutaran suara tidak mati permanen.
+
+#### Scenario: Memulai ulang stream yang sedang dalam proses stopping
+- **WHEN** fungsi `start()` dipanggil saat stream masih berada dalam status `Stopping` atau `Pausing`
+- **THEN** mesin audio menunggu hingga transisi selesai ke `Stopped`/`Paused` sebelum memanggil `requestStart()`, atau membuka ulang stream bila transisi berakhir pada `Closed`/`Disconnected`
+
+### Requirement: Manajemen siklus hidup audio terpusat pada tingkat aplikasi
+Pengelolaan siklus hidup audio (`resumeStream` dan `pauseStream`) SHALL dikelola secara terpusat pada tingkat aplikasi berdasarkan pelacakan jumlah Activity aktif, bukan per masing-masing Activity. Transisi antar-Activity internal (misalnya dari MainActivity ke DevAuthoringActivity atau sebaliknya) SHALL TIDAK menghentikan pemutaran audio stream. Audio stream hanya dijeda ketika seluruh Activity aplikasi telah berada di background.
+
+#### Scenario: Navigasi ke Mode Developer tidak mematikan audio
+- **WHEN** developer membuka Mode Developer dari MainActivity
+- **THEN** stream audio tetap aktif tanpa terjeda karena jumlah Activity aktif tidak mencapai 0 selama transisi, sehingga seluruh instrumen kendang tetap bersuara normal di Mode Developer

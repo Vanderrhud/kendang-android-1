@@ -126,18 +126,73 @@ bool AudioEngine::start() {
     }
 
     if (mStream) {
-        const oboe::StreamState state = mStream->getState();
-        // Hindari memanggil requestStart() berulang kali bila stream sedang Starting/Started
-        // (misal saat onCreate() diikuti langsung oleh onStart()).
+        oboe::StreamState state = mStream->getState();
+
+        // 1. Jika stream sudah berstatus Started atau Starting, pemutaran sudah aktif;
+        // hindari memanggil requestStart() berulang kali untuk mencegah error state.
         if (state == oboe::StreamState::Started || state == oboe::StreamState::Starting) {
             return true;
         }
 
+        // 2. Jika stream sedang dalam proses transisi asynchronous (Stopping atau Pausing),
+        // tunggu hingga transisi selesai ke status Stopped/Paused agar requestStart() tidak
+        // ditolak oleh Oboe dengan oboe::Result::ErrorInvalidState.
+        if (state == oboe::StreamState::Stopping || state == oboe::StreamState::Pausing) {
+            oboe::StreamState nextState = state;
+            // Batas waktu tunggu 500 ms memberikan ruang bagi thread audio HAL perangkat menyelesaikan flush buffer
+            constexpr int64_t kWaitTimeoutNanos = 500 * 1000 * 1000LL;
+            oboe::Result waitResult = mStream->waitForStateChange(state, &nextState, kWaitTimeoutNanos);
+            if (waitResult == oboe::Result::OK) {
+                state = nextState;
+            } else {
+                LOGW("waitForStateChange pada %s menghasilkan: %s",
+                     oboe::convertToText(state), oboe::convertToText(waitResult));
+                state = mStream->getState();
+            }
+        }
+
+        // 3. Jika stream sudah berstatus Started setelah menunggu transisi, tidak perlu start ulang
+        if (state == oboe::StreamState::Started || state == oboe::StreamState::Starting) {
+            return true;
+        }
+
+        // 4. Jika setelah menunggu statusnya menjadi Closed atau Disconnected, bangun stream baru
+        if (state == oboe::StreamState::Closed || state == oboe::StreamState::Disconnected) {
+            mStream.reset();
+            oboe::Result openResult = openStreamInternal();
+            if (openResult != oboe::Result::OK) {
+                LOGE("Gagal membuka ulang stream yang Closed/Disconnected: %s", oboe::convertToText(openResult));
+                return false;
+            }
+        }
+
+        // 5. Ajukan permintaan start ke Oboe
         oboe::Result result = mStream->requestStart();
         if (result != oboe::Result::OK) {
-            LOGE("Gagal memulai Oboe stream: %s", oboe::convertToText(result));
-            return false;
+            // Pemulihan otomatis jika requestStart() gagal (misal ErrorInvalidState akibat kondisi balapan pada driver audio):
+            // Tutup dan lepaskan stream bermasalah, lalu buat stream baru secara bersih agar mesin audio tidak mati permanen.
+            LOGW("requestStart gagal (%s) pada status %s — membuka stream baru secara bersih",
+                 oboe::convertToText(result), oboe::convertToText(mStream->getState()));
+
+            mStream->stop();
+            mStream->close();
+            mStream.reset();
+
+            oboe::Result reopenResult = openStreamInternal();
+            if (reopenResult != oboe::Result::OK) {
+                LOGE("Gagal membuka ulang stream setelah error requestStart: %s", oboe::convertToText(reopenResult));
+                return false;
+            }
+
+            if (mStream) {
+                result = mStream->requestStart();
+                if (result != oboe::Result::OK) {
+                    LOGE("Gagal memulai stream baru setelah reopen: %s", oboe::convertToText(result));
+                    return false;
+                }
+            }
         }
+
         LOGI("Oboe stream aktif dan berjalan pada sampleRate=%d Hz", mSampleRate);
         return true;
     }
@@ -147,13 +202,29 @@ bool AudioEngine::start() {
 void AudioEngine::stop() {
     std::lock_guard<std::mutex> lock(mEngineMutex);
     if (mStream) {
-        const oboe::StreamState state = mStream->getState();
-        if (state == oboe::StreamState::Started || state == oboe::StreamState::Starting) {
+        oboe::StreamState state = mStream->getState();
+
+        // 1. Jika stream masih dalam proses Starting, tunggu transisi selesai ke Started
+        // sebelum meminta stop guna mencegah race condition pada AAudio HAL.
+        if (state == oboe::StreamState::Starting) {
+            oboe::StreamState nextState = state;
+            constexpr int64_t kStartWaitTimeoutNanos = 200 * 1000 * 1000LL; // 200 ms
+            mStream->waitForStateChange(oboe::StreamState::Starting, &nextState, kStartWaitTimeoutNanos);
+            state = mStream->getState();
+        }
+
+        // 2. Minta stop hanya bila stream memang sedang berjalan aktif (Started)
+        if (state == oboe::StreamState::Started) {
             oboe::Result result = mStream->requestStop();
             if (result != oboe::Result::OK) {
                 LOGW("Peringatan saat requestStop Oboe stream: %s", oboe::convertToText(result));
             } else {
-                LOGI("Oboe stream dihentikan sementara (stopped)");
+                // Tunggu transisi Stopping -> Stopped agar pemanggilan start() berikutnya
+                // yang datang berdekatan tidak langsung menjumpai status Stopping.
+                oboe::StreamState nextState = oboe::StreamState::Stopping;
+                constexpr int64_t kStopWaitTimeoutNanos = 200 * 1000 * 1000LL; // 200 ms
+                mStream->waitForStateChange(oboe::StreamState::Stopping, &nextState, kStopWaitTimeoutNanos);
+                LOGI("Oboe stream dihentikan sementara (stopped, final state=%s)", oboe::convertToText(nextState));
             }
         }
     }
