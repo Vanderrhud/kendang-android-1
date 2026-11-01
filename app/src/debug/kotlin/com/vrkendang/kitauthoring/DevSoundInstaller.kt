@@ -67,14 +67,14 @@ class DevSoundInstaller(
         // 1. Validasi batas ukuran file (maksimum 5 MB)
         if (bytes.size > KitPackageReader.MAX_WAV_SIZE) {
             val sizeMb = bytes.size / (1024 * 1024.0)
-            return Result.Failure("Ukuran file melebihi batas 5 MB (terdeteksi: String.format(\"%.1f\", sizeMb) MB)")
+            return Result.Failure("Ukuran file melebihi batas 5 MB (terdeteksi: ${String.format("%.1f", sizeMb)} MB)")
         }
 
         // 2. Validasi format WAV dan konversi otomatis ke 16-bit mono via WavParser
         val wavPcm = try {
             WavParser.parse(bytes)
         } catch (e: IllegalArgumentException) {
-            return Result.Failure("Format audio WAV ditolak: ${e.message}")
+            return Result.Failure("Format harus WAV PCM 16-bit mono (${e.message})")
         } catch (e: Exception) {
             return Result.Failure("Gagal mengurai file WAV: ${e.message}")
         }
