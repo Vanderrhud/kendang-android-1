@@ -68,11 +68,40 @@ class KendangBoardView @JvmOverloads constructor(
             invalidate()
         }
 
-    /** Menampilkan garis batas zona, label zona, dan indikator status WAV di atas kulit kendang. */
+    /** Menampilkan garis batas zona di atas kulit kendang. */
     var showZoneGuides: Boolean = false
         set(value) {
             field = value
             zoneGuideOverlay.isEnabled = value
+            invalidate()
+        }
+
+    /** Menampilkan lencana teks nama zona di atas kulit kendang (default: false agar kulit kendang bersih). */
+    var showZoneTextBadges: Boolean = false
+        set(value) {
+            field = value
+            invalidate()
+        }
+
+    /**
+     * Bila true (default pada layar bermain & halaman Sesuaikan), kanvas memakai 100% lebar & tinggi view
+     * dari ujung kiri ke ujung kanan layar tanpa kotak margin mati.
+     */
+    var fullScreenEdgeToEdge: Boolean = true
+        set(value) {
+            field = value
+            updateMapper()
+            invalidate()
+        }
+
+    /**
+     * Bila true (dipakai pada panel preview 60% di Mode Developer), kanvas di-fit ke dalam batas panel
+     * agar keempat kendang selalu terlihat utuh tanpa terpotong tepi panel.
+     */
+    var fitInsidePanel: Boolean = false
+        set(value) {
+            field = value
+            updateMapper()
             invalidate()
         }
 
@@ -141,11 +170,13 @@ class KendangBoardView @JvmOverloads constructor(
      * Memperbarui dimensi mapper secara manual untuk pengujian unit test tanpa display pipeline.
      */
     fun setDimensionsForTest(w: Int, h: Int) {
+        fullScreenEdgeToEdge = false
         val aspect = kit?.canvasAspect ?: 2.0f
         mapper = CanvasCoordinateMapper(
             viewWidth = w.toFloat(),
             viewHeight = h.toFloat(),
-            canvasAspect = aspect
+            canvasAspect = aspect,
+            fitInsideView = false
         )
     }
 
@@ -159,19 +190,19 @@ class KendangBoardView @JvmOverloads constructor(
 
     // Paints untuk rendering kendang
     private val boardBackgroundPaint = Paint().apply {
-        color = Color.parseColor("#121212")
+        color = Color.parseColor("#1B1613")
         style = Paint.Style.FILL
     }
 
     private val canvasAreaPaint = Paint().apply {
-        color = Color.parseColor("#181614")
+        color = Color.parseColor("#1B1613")
         style = Paint.Style.FILL
     }
 
     private val canvasBorderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = Color.parseColor("#2E2925")
+        color = Color.parseColor("#3E322B")
         style = Paint.Style.STROKE
-        strokeWidth = 2f
+        strokeWidth = 3f
     }
 
     private val drumBodyPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -261,12 +292,30 @@ class KendangBoardView @JvmOverloads constructor(
     }
 
     private fun updateMapper() {
-        val aspect = kit?.canvasAspect ?: 2.0f
+        val w = width.toFloat()
+        val h = height.toFloat()
+        val baseAspect = kit?.canvasAspect ?: 2.0f
+        val effectiveAspect = if (fullScreenEdgeToEdge && !fitInsidePanel && w > 0f && h > 0f) {
+            w / h
+        } else {
+            baseAspect
+        }
         mapper = CanvasCoordinateMapper(
-            viewWidth = width.toFloat(),
-            viewHeight = height.toFloat(),
-            canvasAspect = aspect
+            viewWidth = w,
+            viewHeight = h,
+            canvasAspect = effectiveAspect,
+            fitInsideView = fitInsidePanel
         )
+    }
+
+    private fun effectiveKitForHitAndClamp(currentKit: KitData): KitData {
+        val w = width.toFloat()
+        val h = height.toFloat()
+        return if (fullScreenEdgeToEdge && !fitInsidePanel && w > 0f && h > 0f) {
+            currentKit.copy(canvasAspect = w / h)
+        } else {
+            currentKit
+        }
     }
 
     /**
@@ -285,23 +334,19 @@ class KendangBoardView @JvmOverloads constructor(
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
 
-        // 1. Gambar latar belakang gelap papan kendang
-        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), boardBackgroundPaint)
+        // 1. Gambar latar belakang kanvas papan kendang penuh (100% view)
+        val fullViewRect = RectF(0f, 0f, width.toFloat(), height.toFloat())
+        canvas.drawRect(fullViewRect, boardBackgroundPaint)
+        canvas.drawRect(
+            1.5f,
+            1.5f,
+            (width.toFloat() - 1.5f).coerceAtLeast(1.5f),
+            (height.toFloat() - 1.5f).coerceAtLeast(1.5f),
+            canvasBorderPaint
+        )
 
         val currentKit = kit ?: return
         if (mapper.canvasWidth <= 0f || mapper.canvasHeight <= 0f) return
-
-        // Area kanvas aktif (memudahkan orientasi visual di mode edit/kalibrasi)
-        val canvasRect = RectF(
-            mapper.canvasLeft,
-            mapper.canvasTop,
-            mapper.canvasRight,
-            mapper.canvasBottom
-        )
-        canvas.drawRect(canvasRect, canvasAreaPaint)
-        if (mode == BoardMode.EDIT_LAYOUT || showZoneGuides) {
-            canvas.drawRect(canvasRect, canvasBorderPaint)
-        }
 
         val now = SystemClock.uptimeMillis()
 
@@ -356,8 +401,8 @@ class KendangBoardView @JvmOverloads constructor(
             // Rim / bingkai kayu tepi kendang
             canvas.drawOval(ovalRect, drumRimPaint)
 
-            // Highlight seleksi jika kendang ini sedang dipilih pada mode EDIT_LAYOUT
-            if (mode == BoardMode.EDIT_LAYOUT && drum.id == selectedDrumId) {
+            // Highlight seleksi jika kendang ini sedang dipilih pada mode EDIT_LAYOUT atau SELECT_ZONE
+            if ((mode == BoardMode.EDIT_LAYOUT || mode == BoardMode.SELECT_ZONE) && drum.id == selectedDrumId) {
                 canvas.drawOval(ovalRect, selectionPaint)
             }
         }
@@ -500,8 +545,8 @@ class KendangBoardView @JvmOverloads constructor(
                 )
             }
 
-            // Gambar lencana (badge) untuk setiap zona di titik tengah geometrisnya
-            if (showZoneGuides || mode == BoardMode.SELECT_ZONE) {
+            // Gambar lencana (badge) hanya jika showZoneTextBadges diaktifkan secara eksplisit
+            if (showZoneTextBadges) {
                 for (zone in drum.zones) {
                     val pos = computeZoneLabelPosition(drum, zone, cx, cy, rx, ry)
                     drawZoneBadge(canvas, zone, pos.first, pos.second, density)
@@ -676,7 +721,8 @@ class KendangBoardView @JvmOverloads constructor(
             if (mapper.isInsideCanvas(touchX, touchY)) {
                 val canvasPt = mapper.toCanvasCoordinates(touchX, touchY)
                 if (canvasPt != null) {
-                    val hit = HitTester.findHit(currentKit, canvasPt.x, canvasPt.y)
+                    val hitKit = effectiveKitForHitAndClamp(currentKit)
+                    val hit = HitTester.findHit(hitKit, canvasPt.x, canvasPt.y)
                     if (hit != null) {
                         selectedDrumId = hit.drum.id
                         selectedZoneId = hit.zone.id
@@ -715,7 +761,8 @@ class KendangBoardView @JvmOverloads constructor(
         }
 
         val canvasPt = mapper.toCanvasCoordinates(pixelX, pixelY) ?: return false
-        val hit = HitTester.findHit(currentKit, canvasPt.x, canvasPt.y) ?: return false
+        val hitKit = effectiveKitForHitAndClamp(currentKit)
+        val hit = HitTester.findHit(hitKit, canvasPt.x, canvasPt.y) ?: return false
 
         onZoneTapped(hit.drum, hit.zone)
         return true
@@ -769,7 +816,8 @@ class KendangBoardView @JvmOverloads constructor(
                 if (mapper.isInsideCanvas(touchX, touchY)) {
                     val canvasPt = mapper.toCanvasCoordinates(touchX, touchY)
                     if (canvasPt != null) {
-                        val hit = HitTester.findHit(currentKit, canvasPt.x, canvasPt.y)
+                        val hitKit = effectiveKitForHitAndClamp(currentKit)
+                        val hit = HitTester.findHit(hitKit, canvasPt.x, canvasPt.y)
                         if (hit != null) {
                             selectedDrumId = hit.drum.id
                             onDrumSelectedListener?.invoke(hit.drum)
@@ -826,10 +874,11 @@ class KendangBoardView @JvmOverloads constructor(
                             )
 
                             // Jepit posisi center agar oval tetap berada di dalam kanvas
+                            val clampKit = effectiveKitForHitAndClamp(currentKit)
                             val clampedCenter = LayoutMerger.clampCenter(
                                 center = proposedCenter,
                                 radius = selectedDrum.radius,
-                                canvasAspect = currentKit.canvasAspect,
+                                canvasAspect = clampKit.canvasAspect,
                                 scale = 1.0f
                             )
 

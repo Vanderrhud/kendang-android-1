@@ -20,36 +20,28 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import com.vrkendang.KitSelectActivity
 import com.vrkendang.audio.AudioEngine
 import com.vrkendang.audio.KitAudioLoader
-import com.vrkendang.kitcore.model.DrumData
 import com.vrkendang.kitcore.model.KitData
-import com.vrkendang.kitcore.model.ZoneData
 import com.vrkendang.repository.KitRepository
 import com.vrkendang.view.KendangBoardView
 import java.io.File
 import kotlin.math.roundToInt
 
 /**
- * Halaman Mode Developer Layar Penuh — Konfigurasi per Kendang (Tahap 11).
+ * Halaman Mode Developer Layar Penuh — Studio Konfigurasi per Kendang (Tahap 11).
  *
- * Sesuai Desain Penpot ("4. Mode Developer (Konfigurasi per Kendang)") & Spesifikasi Kit Authoring:
- * - Header rapi dengan pemisahan tegas:
- *   - Kiri: "← Tutup" + label "Kit: <Nama>"
- *   - Tengah: "Impor" dan "Ekspor" (khusus paket ZIP .vrkendang di penyimpanan HP)
- *   - Kanan: "+ Kit Baru" (simpan menjadi kit baru di dalam aplikasi),
- *            "✓ Simpan" (simpan menimpa kit saat ini di dalam aplikasi tanpa file picker HP),
- *            dan "▶ Uji Main" (beralih ke mode uji ketuk penuh).
- * - Pola Pemilihan per Kendang (Panel Kiri -> Panel Kanan):
- *   - Panel Kiri menampilkan daftar 4 kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`) + pratinjau papan.
- *   - Panel Kanan menampilkan khusus zona milik kendang terpilih, sampel WAV & volume zona,
- *     serta Parameter Busur Bass (`dx`, `dy`, `r`) khusus saat `Bass` dipilih.
- *   - Tanpa tombol urutan prioritas Naik/Turun.
+ * Sesuai Desain Penpot Terbaru ("4. Mode Developer (Konfigurasi per Kendang)"):
+ * - Sisi Kiri (60% lebar layar): Kanvas Preview Kendang Besar & Bersih (tanpa daftar kartu teks yang memakan ruang
+ *   dan tanpa tempelan label teks zona di atas kulit kendang), dilengkapi baris tab ringkas `[Bass] [Kecil 1] [Sedang] [Kecil 2]`.
+ * - Sisi Kanan (40% lebar layar): Panel Konfigurasi Ringkas yang muat dalam 1 layar tanpa scroll:
+ *   1. Baris tombol zona milik kendang terpilih (`bass-1`..`bass-5`, dst.)
+ *   2. Kotak Sampel & Volume Zona (`Pilih WAV`, `▶ Tes`, `Hapus`, dan slider `Volume`)
+ *   3. Kotak Parameter Busur Bass (`dx`, `dy`, `r`) yang langsung menggerakkan garis busur di kanvas besar sebelah kiri.
  */
 class DevAuthoringActivity : Activity() {
 
@@ -67,7 +59,7 @@ class DevAuthoringActivity : Activity() {
     private var isTestPlayMode: Boolean = false
     private var selectedDrumId: String = "bass"
     private var selectedZoneId: String = "bass-1"
-    private var showGuidesInTestPlay: Boolean = true
+    private var showGuidesInTestPlay: Boolean = false
 
     private lateinit var headerKitLabel: TextView
     private lateinit var testPlayToggleBtn: Button
@@ -150,7 +142,7 @@ class DevAuthoringActivity : Activity() {
     }
 
     // =========================================================================
-    // Header Mode Developer (Sesuai Desain Penpot Frame 4)
+    // Header Mode Developer
     // =========================================================================
 
     private fun buildRootLayout(): View {
@@ -158,54 +150,53 @@ class DevAuthoringActivity : Activity() {
 
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#141210"))
+            setBackgroundColor(Color.parseColor("#14110F"))
         }
 
         val topBar = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.parseColor("#1A1715"))
-            setPadding((10 * density).toInt(), (6 * density).toInt(), (10 * density).toInt(), (6 * density).toInt())
+            setBackgroundColor(Color.parseColor("#1E1A17"))
+            setPadding((10 * density).toInt(), (4 * density).toInt(), (10 * density).toInt(), (4 * density).toInt())
         }
 
-        // Kiri: Tombol "← Tutup" + Label "Kit: <Nama>"
-        val closeBtn = createHeaderButton("← Tutup", "#2A2622", "#443D36") {
+        val closeBtn = createHeaderButton("← Tutup", "#2B2520", "#4A3F37") {
             handleExitRequest()
         }
         topBar.addView(closeBtn)
 
         headerKitLabel = TextView(this).apply {
-            textSize = 13f
-            setTextColor(Color.parseColor("#FFD54F"))
+            textSize = 12.5f
+            setTextColor(Color.WHITE)
             paint.isFakeBoldText = true
             setPadding((6 * density).toInt(), 0, (8 * density).toInt(), 0)
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
         }
         topBar.addView(headerKitLabel)
 
-        // Tengah: Tombol "Impor" & "Ekspor" (khusus paket ZIP .vrkendang di penyimpanan HP)
-        val importBtn = createHeaderButton("Impor", "#212529", "#495057") {
+        val importBtn = createHeaderButton("Impor", "#221D19", "#4A3F37") {
             promptImportPackage()
         }
         topBar.addView(importBtn)
 
-        val exportBtn = createHeaderButton("Ekspor", "#212529", "#495057") {
+        val exportBtn = createHeaderButton("Ekspor", "#221D19", "#4A3F37") {
             launchExportPackagePicker()
         }
         topBar.addView(exportBtn)
 
-        // Kanan: "+ Kit Baru", "✓ Simpan", dan "▶ Uji Main"
-        val newKitBtn = createHeaderButton("+ Kit Baru", "#1565C0", "#64B5F6") {
+        val newKitBtn = createHeaderButton("+ Kit Baru", "#2B2520", "#D9822B") {
             showSaveAsNewKitDialog()
+        }.apply {
+            setTextColor(Color.parseColor("#FFB74D"))
         }
         topBar.addView(newKitBtn)
 
-        val saveBtn = createHeaderButton("✓ Simpan", "#2E7D32", "#66BB6A") {
+        val saveBtn = createHeaderButton("✓ Simpan", "#2E7D32", "#4CAF50") {
             handleSaveCurrentKitInternal()
         }
         topBar.addView(saveBtn)
 
-        testPlayToggleBtn = createHeaderButton("▶ Uji Main", "#4A148C", "#BA68C8") {
+        testPlayToggleBtn = createHeaderButton("▶ Uji Main", "#1565C0", "#42A5F5") {
             isTestPlayMode = !isTestPlayMode
             renderCurrentModeContent()
         }
@@ -213,11 +204,11 @@ class DevAuthoringActivity : Activity() {
 
         root.addView(
             topBar,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (46 * density).toInt())
+            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (42 * density).toInt())
         )
 
         contentFrame = FrameLayout(this).apply {
-            setBackgroundColor(Color.parseColor("#141210"))
+            setBackgroundColor(Color.parseColor("#14110F"))
         }
         root.addView(
             contentFrame,
@@ -231,11 +222,14 @@ class DevAuthoringActivity : Activity() {
     private fun refreshHeaderStatus() {
         val kit = session.workingKit
         if (kit == null) {
-            headerKitLabel.text = "Kit: -"
+            headerKitLabel.text = "-"
             return
         }
         val dirtyDot = if (session.hasUnsavedChanges) " •" else ""
-        headerKitLabel.text = "Kit: ${kit.name}$dirtyDot"
+        headerKitLabel.text = "${kit.name}$dirtyDot"
+        headerKitLabel.setTextColor(
+            if (session.hasUnsavedChanges) Color.parseColor("#FFB74D") else Color.WHITE
+        )
     }
 
     private fun renderCurrentModeContent() {
@@ -245,23 +239,22 @@ class DevAuthoringActivity : Activity() {
         if (isTestPlayMode) {
             testPlayToggleBtn.text = "⚙ Konfigurasi"
             testPlayToggleBtn.background = GradientDrawable().apply {
-                setColor(Color.parseColor("#FF8F00"))
+                setColor(Color.parseColor("#D9822B"))
                 cornerRadius = 8f * density
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#FFE082"))
             }
-            testPlayToggleBtn.setTextColor(Color.BLACK)
+            testPlayToggleBtn.setTextColor(Color.parseColor("#14110F"))
         } else {
             testPlayToggleBtn.text = "▶ Uji Main"
             testPlayToggleBtn.background = GradientDrawable().apply {
-                setColor(Color.parseColor("#4A148C"))
+                setColor(Color.parseColor("#1565C0"))
                 cornerRadius = 8f * density
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#BA68C8"))
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#42A5F5"))
             }
             testPlayToggleBtn.setTextColor(Color.WHITE)
         }
 
         contentFrame.removeAllViews()
-        val page = if (isTestPlayMode) buildTestPlayPage() else buildPerDrumConfigPage()
+        val page = if (isTestPlayMode) buildTestPlayPage() else buildStudioSplitPage()
         contentFrame.addView(
             page,
             FrameLayout.LayoutParams(
@@ -272,10 +265,10 @@ class DevAuthoringActivity : Activity() {
     }
 
     // =========================================================================
-    // Halaman Utama Mode Developer: Pemilihan per Kendang (Panel Kiri -> Kanan)
+    // Studio Split-Screen: 60% Kanvas Kendang Besar & Bersih (Kiri) + 40% Panel Ringkas (Kanan)
     // =========================================================================
 
-    private fun buildPerDrumConfigPage(): View {
+    private fun buildStudioSplitPage(): View {
         val density = resources.displayMetrics.density
         val kit = session.workingKit ?: return TextView(this)
 
@@ -288,180 +281,124 @@ class DevAuthoringActivity : Activity() {
         val root = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             weightSum = 10.0f
-            setBackgroundColor(Color.parseColor("#141210"))
+            setBackgroundColor(Color.parseColor("#14110F"))
+            setPadding((8 * density).toInt(), (6 * density).toInt(), (8 * density).toInt(), (6 * density).toInt())
         }
 
-        // PANEL KIRI (36% lebar): PILIH KENDANG + Pratinjau Papan Mini
-        val leftPanel = LinearLayout(this).apply {
+        // SISI KIRI (60% Lebar): Baris Tab Ringkas di Atas + Kanvas Preview Kendang Besar & Bersih
+        val leftColumn = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 3.6f)
-            setBackgroundColor(Color.parseColor("#181512"))
-            setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 6.0f).apply {
+                marginEnd = (8 * density).toInt()
+            }
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#1B1613"))
+                cornerRadius = 10f * density
+                setStroke((1.5f * density).toInt().coerceAtLeast(1), Color.parseColor("#3E322B"))
+            }
+            setPadding((8 * density).toInt(), (6 * density).toInt(), (8 * density).toInt(), (6 * density).toInt())
         }
 
-        val leftTitle = TextView(this).apply {
-            text = "PILIH KENDANG"
-            textSize = 11f
-            setTextColor(Color.parseColor("#9E9E9E"))
-            paint.isFakeBoldText = true
+        val drumTabsRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
         }
-        leftPanel.addView(leftTitle)
-
-        val leftSub = TextView(this).apply {
-            text = "Ketuk kendang untuk mengatur zona & suara"
-            textSize = 10f
-            setTextColor(Color.parseColor("#757575"))
-            setPadding(0, (1 * density).toInt(), 0, (6 * density).toInt())
-        }
-        leftPanel.addView(leftSub)
-
-        val drumCardsContainer = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        leftPanel.addView(drumCardsContainer)
+        leftColumn.addView(drumTabsRow)
 
         val rightPanelContainer = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 4.0f)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#1C1815"))
+                cornerRadius = 10f * density
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#332B25"))
+            }
+            setPadding((10 * density).toInt(), (8 * density).toInt(), (10 * density).toInt(), (8 * density).toInt())
         }
 
         val previewBoard = KendangBoardView(this).apply {
             mode = KendangBoardView.BoardMode.SELECT_ZONE
             showZoneGuides = true
+            showZoneTextBadges = false // Kulit kendang 100% bersih tanpa tempelan teks!
+            fullScreenEdgeToEdge = false
+            fitInsidePanel = true
             this.kit = kit
             this.slotByZoneId = activeSlotMap
             this.selectedDrumId = this@DevAuthoringActivity.selectedDrumId
             this.selectedZoneId = this@DevAuthoringActivity.selectedZoneId
-            background = GradientDrawable().apply {
-                setColor(Color.parseColor("#141210"))
-                cornerRadius = 8f * density
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#2A241E"))
-            }
         }
 
         previewBoard.onZoneSelectedListener = { drum, zone ->
             selectedDrumId = drum.id
             selectedZoneId = zone.id
-            populateLeftDrumCards(drumCardsContainer, previewBoard, rightPanelContainer)
-            populateRightDrumConfig(rightPanelContainer, previewBoard, drumCardsContainer)
+            populateDrumTabs(drumTabsRow, previewBoard, rightPanelContainer)
+            populateCompactRightPanel(rightPanelContainer, previewBoard, drumTabsRow)
         }
 
-        leftPanel.addView(
+        leftColumn.addView(
             previewBoard,
             LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f).apply {
-                topMargin = (6 * density).toInt()
+                topMargin = (4 * density).toInt()
             }
         )
-        root.addView(leftPanel)
 
-        // PANEL KANAN (64% lebar): KONFIGURASI KENDANG TERPILIH
-        val rightScroll = ScrollView(this).apply {
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.MATCH_PARENT, 6.4f)
-            setBackgroundColor(Color.parseColor("#141210"))
-        }
+        root.addView(leftColumn)
+        root.addView(rightPanelContainer)
 
-        val rightPaddingWrap = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding((14 * density).toInt(), (10 * density).toInt(), (14 * density).toInt(), (14 * density).toInt())
-        }
-        rightPaddingWrap.addView(rightPanelContainer)
-        rightScroll.addView(rightPaddingWrap)
-        root.addView(rightScroll)
-
-        populateLeftDrumCards(drumCardsContainer, previewBoard, rightPanelContainer)
-        populateRightDrumConfig(rightPanelContainer, previewBoard, drumCardsContainer)
+        populateDrumTabs(drumTabsRow, previewBoard, rightPanelContainer)
+        populateCompactRightPanel(rightPanelContainer, previewBoard, drumTabsRow)
 
         return root
     }
 
-    private fun populateLeftDrumCards(
-        drumCardsContainer: LinearLayout,
+    private fun populateDrumTabs(
+        tabsRow: LinearLayout,
         previewBoard: KendangBoardView,
         rightPanelContainer: LinearLayout
     ) {
-        drumCardsContainer.removeAllViews()
+        tabsRow.removeAllViews()
         val density = resources.displayMetrics.density
         val kit = session.workingKit ?: return
 
         for (drum in kit.drums) {
             val isSelected = (drum.id == selectedDrumId)
-            val displayName = formatDrumDisplayName(drum.id)
-            val zoneDesc = when (drum.id) {
-                "bass" -> "5 Zona (bass-1 s/d bass-5)"
-                "kecil1" -> "1 Zona (kecil1-1)"
-                "sedang" -> "2 Zona (sedang-1, sedang-2)"
-                "kecil2" -> "2 Zona (kecil2-1, kecil2-2)"
-                else -> "${drum.zones.size} Zona"
-            }
-
-            val card = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding((10 * density).toInt(), (6 * density).toInt(), (10 * density).toInt(), (6 * density).toInt())
+            val tabBtn = Button(this).apply {
+                text = formatDrumDisplayName(drum.id)
+                textSize = 11f
+                isAllCaps = false
+                setTextColor(if (isSelected) Color.parseColor("#14110F") else Color.parseColor("#E0D8D0"))
+                paint.isFakeBoldText = true
                 background = GradientDrawable().apply {
-                    setColor(Color.parseColor(if (isSelected) "#2C2218" else "#1F1C19"))
-                    cornerRadius = 8f * density
-                    setStroke(
-                        ((if (isSelected) 2f else 1f) * density).toInt().coerceAtLeast(1),
-                        Color.parseColor(if (isSelected) "#FF8F00" else "#332D28")
-                    )
+                    setColor(Color.parseColor(if (isSelected) "#D9822B" else "#26201B"))
+                    cornerRadius = 6f * density
+                    if (!isSelected) {
+                        setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#4A3F37"))
+                    }
                 }
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.MATCH_PARENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (26 * density).toInt()
                 ).apply {
-                    bottomMargin = (5 * density).toInt()
+                    marginEnd = (6 * density).toInt()
                 }
-                isClickable = true
-                isFocusable = true
+                setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
                 setOnClickListener {
                     selectedDrumId = drum.id
                     selectedZoneId = drum.zones.first().id
                     previewBoard.selectedDrumId = selectedDrumId
                     previewBoard.selectedZoneId = selectedZoneId
-                    populateLeftDrumCards(drumCardsContainer, previewBoard, rightPanelContainer)
-                    populateRightDrumConfig(rightPanelContainer, previewBoard, drumCardsContainer)
+                    populateDrumTabs(tabsRow, previewBoard, rightPanelContainer)
+                    populateCompactRightPanel(rightPanelContainer, previewBoard, tabsRow)
                 }
             }
-
-            val textCol = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
-            }
-
-            val nameTv = TextView(this).apply {
-                text = displayName
-                textSize = 12.5f
-                setTextColor(Color.parseColor(if (isSelected) "#FFD54F" else "#E0E0E0"))
-                paint.isFakeBoldText = true
-            }
-            textCol.addView(nameTv)
-
-            val subTv = TextView(this).apply {
-                text = zoneDesc
-                textSize = 10f
-                setTextColor(Color.parseColor(if (isSelected) "#BDBDBD" else "#757575"))
-            }
-            textCol.addView(subTv)
-            card.addView(textCol)
-
-            if (isSelected) {
-                val activeBadge = TextView(this).apply {
-                    text = "Aktif"
-                    textSize = 10.5f
-                    setTextColor(Color.parseColor("#FF8F00"))
-                    paint.isFakeBoldText = true
-                }
-                card.addView(activeBadge)
-            }
-
-            drumCardsContainer.addView(card)
+            tabsRow.addView(tabBtn)
         }
     }
 
-    private fun populateRightDrumConfig(
+    private fun populateCompactRightPanel(
         rightContainer: LinearLayout,
         previewBoard: KendangBoardView,
-        drumCardsContainer: LinearLayout
+        tabsRow: LinearLayout
     ) {
         rightContainer.removeAllViews()
         val density = resources.displayMetrics.density
@@ -474,124 +411,104 @@ class DevAuthoringActivity : Activity() {
         val displayName = formatDrumDisplayName(drum.id).uppercase()
 
         // Judul Konfigurasi Kendang Terpilih
-        val headerTitle = TextView(this).apply {
+        val titleTv = TextView(this).apply {
             text = "KONFIGURASI: $displayName"
-            textSize = 14f
-            setTextColor(Color.parseColor("#FFD54F"))
-            paint.isFakeBoldText = true
-            setPadding(0, 0, 0, (6 * density).toInt())
-        }
-        rightContainer.addView(headerTitle)
-
-        // 1. Bagian Pilih Zona Milik Kendang Ini
-        val zoneSectionLabel = TextView(this).apply {
-            text = "ZONA SUARA $displayName (Ketuk zona untuk pilih sampel WAV & volume)"
-            textSize = 10.5f
-            setTextColor(Color.parseColor("#9E9E9E"))
+            textSize = 12f
+            setTextColor(Color.parseColor("#FFB74D"))
             paint.isFakeBoldText = true
             setPadding(0, 0, 0, (4 * density).toInt())
         }
-        rightContainer.addView(zoneSectionLabel)
+        rightContainer.addView(titleTv)
 
-        val zoneRow = LinearLayout(this).apply {
+        // 1. Baris Chip Zona (1 Baris Rapi)
+        val zoneChipsRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, 0, 0, (8 * density).toInt())
+            setPadding(0, 0, 0, (6 * density).toInt())
         }
 
         for (z in drum.zones) {
             val isZoneSelected = (z.id == selectedZoneId)
             val hasWav = (z.sound != null)
 
-            val chipBg = when {
-                isZoneSelected -> "#FF8F00"
+            val bgHex = when {
+                isZoneSelected -> "#D9822B"
                 hasWav -> "#1B3B2B"
-                else -> "#24201C"
+                else -> "#29221C"
             }
-            val chipStroke = when {
-                isZoneSelected -> "#FFE082"
+            val strokeHex = when {
+                isZoneSelected -> "#FFB74D"
                 hasWav -> "#4CAF50"
-                else -> "#3E3731"
+                else -> "#4A3F37"
             }
-            val chipTextColor = when {
-                isZoneSelected -> Color.BLACK
+            val txtColor = when {
+                isZoneSelected -> Color.parseColor("#14110F")
                 hasWav -> Color.parseColor("#81C784")
-                else -> Color.parseColor("#BDBDBD")
+                else -> Color.parseColor("#E0D8D0")
             }
 
             val chip = Button(this).apply {
-                text = if (hasWav) "✓ ${z.id}" else z.id
-                textSize = 11f
+                text = z.id
+                textSize = 10f
                 isAllCaps = false
-                setTextColor(chipTextColor)
+                setTextColor(txtColor)
                 paint.isFakeBoldText = true
                 background = GradientDrawable().apply {
-                    setColor(Color.parseColor(chipBg))
-                    cornerRadius = 8f * density
-                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(chipStroke))
+                    setColor(Color.parseColor(bgHex))
+                    cornerRadius = 6f * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(strokeHex))
                 }
                 layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    (32 * density).toInt()
+                    0,
+                    (26 * density).toInt(),
+                    1.0f
                 ).apply {
-                    marginEnd = (6 * density).toInt()
+                    marginEnd = (4 * density).toInt()
                 }
-                setPadding((10 * density).toInt(), 0, (10 * density).toInt(), 0)
+                setPadding(0, 0, 0, 0)
                 setOnClickListener {
                     selectedZoneId = z.id
                     previewBoard.selectedZoneId = z.id
-                    populateRightDrumConfig(rightContainer, previewBoard, drumCardsContainer)
+                    populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
                 }
             }
-            zoneRow.addView(chip)
+            zoneChipsRow.addView(chip)
         }
-        rightContainer.addView(zoneRow)
+        rightContainer.addView(zoneChipsRow)
 
-        // 2. Kartu Sampel Audio & Volume Zona Terpilih
-        val audioCard = createCardContainer().apply {
+        // 2. Kotak Sampel Audio & Volume Zona (Ringkas)
+        val audioBox = createCompactBox().apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
                 LinearLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                bottomMargin = (8 * density).toInt()
+                bottomMargin = (6 * density).toInt()
             }
         }
 
-        val audioTopRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-        }
-
-        val audioInfoCol = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
-        }
-
-        val audioTitle = TextView(this).apply {
-            text = "Sampel Audio — Zona ${zone.id}"
-            textSize = 13f
-            setTextColor(Color.WHITE)
-            paint.isFakeBoldText = true
-        }
-        audioInfoCol.addView(audioTitle)
-
         val hasSound = zone.sound != null
-        val fileStatusTv = TextView(this).apply {
-            text = if (hasSound) "File: ${zone.sound}" else "Belum ada suara"
+        val fileNameOnly = zone.sound?.substringAfterLast('/') ?: "Belum ada suara"
+        val fileInfoTv = TextView(this).apply {
+            text = "Zona ${zone.id}  •  $fileNameOnly"
             textSize = 11f
             setTextColor(Color.parseColor(if (hasSound) "#81C784" else "#FFB74D"))
-            setPadding(0, (2 * density).toInt(), 0, 0)
+            paint.isFakeBoldText = true
+            setPadding(0, 0, 0, (4 * density).toInt())
         }
-        audioInfoCol.addView(fileStatusTv)
-        audioTopRow.addView(audioInfoCol)
+        audioBox.addView(fileInfoTv)
 
-        // Tombol Pilih WAV, ▶ Tes, Hapus
-        val pickWavBtn = createActionButton("Pilih WAV", "#1565C0", "#64B5F6") {
+        val btnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, (4 * density).toInt())
+        }
+
+        val pickWavBtn = createCompactActionButton("Pilih WAV", "#2E7D32", "#4CAF50", 1.2f) {
             launchWavPickerForSelectedZone()
         }
-        audioTopRow.addView(pickWavBtn)
+        btnRow.addView(pickWavBtn)
 
-        val testWavBtn = createActionButton("▶ Tes", "#2E7D32", "#66BB6A") {
+        val testWavBtn = createCompactActionButton("▶ Tes", "#2B2520", "#4A3F37", 1.0f) {
             val curZone = session.workingKit?.drums
                 ?.flatMap { it.zones }
                 ?.firstOrNull { it.id == zone.id }
@@ -602,50 +519,45 @@ class DevAuthoringActivity : Activity() {
                 AudioEngine.triggerSound(slot, curZone.gain)
             }
         }
-        audioTopRow.addView(testWavBtn)
+        btnRow.addView(testWavBtn)
 
-        val clearWavBtn = createActionButton("Hapus", "#4A1C1C", "#EF5350") {
+        val clearWavBtn = createCompactActionButton("Hapus", "#3A1D1D", "#8E3A3A", 1.0f) {
             val res = session.clearZoneSound(zone.id)
             if (res is DevSoundInstaller.Result.Success) {
                 val slot = activeSlotMap[zone.id] ?: 0
                 AudioEngine.unloadSound(slot)
                 previewBoard.kit = res.updatedKit
                 refreshHeaderStatus()
-                populateRightDrumConfig(rightContainer, previewBoard, drumCardsContainer)
-                Toast.makeText(this, "Suara zona ${zone.id} dihapus", Toast.LENGTH_SHORT).show()
+                populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
             }
         }
-        audioTopRow.addView(clearWavBtn)
-        audioCard.addView(audioTopRow)
+        btnRow.addView(clearWavBtn)
+        audioBox.addView(btnRow)
 
-        // Baris Volume Zona (Gain)
         val gainRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, (8 * density).toInt(), 0, 0)
         }
-
         val gainLabel = TextView(this).apply {
-            text = "Volume Zona:"
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#BDBDBD"))
+            text = "Volume:"
+            textSize = 10.5f
+            setTextColor(Color.parseColor("#C7BEB5"))
         }
         gainRow.addView(gainLabel)
 
         val gainValueTv = TextView(this).apply {
             text = String.format("%.2fx", zone.gain)
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#FFB300"))
+            textSize = 10.5f
+            setTextColor(Color.parseColor("#FFB74D"))
             paint.isFakeBoldText = true
-            setPadding((8 * density).toInt(), 0, (4 * density).toInt(), 0)
+            gravity = Gravity.END
+            layoutParams = LinearLayout.LayoutParams((38 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
         }
 
         val gainSeek = SeekBar(this).apply {
             max = 200
             progress = (zone.gain * 100f).roundToInt().coerceIn(0, 200)
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f).apply {
-                marginStart = (6 * density).toInt()
-            }
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (!fromUser) return
@@ -661,48 +573,58 @@ class DevAuthoringActivity : Activity() {
         }
         gainRow.addView(gainSeek)
         gainRow.addView(gainValueTv)
-        audioCard.addView(gainRow)
+        audioBox.addView(gainRow)
 
-        rightContainer.addView(audioCard)
+        rightContainer.addView(audioBox)
 
-        // 3. Kartu PARAMETER BUSUR BASS (Khusus saat kendang Bass dipilih)
+        // 3. Kotak Parameter Busur Bass (Khusus saat Bass dipilih — Muat Tanpa Scroll!)
         if (drum.model == "bass" && drum.divider != null) {
             val divider = drum.divider!!
-            val bassCard = createCardContainer()
+            val bassBox = createCompactBox()
 
             val bassHeaderRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(0, 0, 0, (4 * density).toInt())
+                setPadding(0, 0, 0, (2 * density).toInt())
             }
 
-            val bassParamTitle = TextView(this).apply {
+            val bassTitle = TextView(this).apply {
                 text = "PARAMETER BUSUR BASS"
-                textSize = 11f
-                setTextColor(Color.parseColor("#9E9E9E"))
+                textSize = 10f
+                setTextColor(Color.parseColor("#A89F96"))
                 paint.isFakeBoldText = true
                 layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
             }
-            bassHeaderRow.addView(bassParamTitle)
+            bassHeaderRow.addView(bassTitle)
 
-            val resetArcBtn = createActionButton("↺ Reset Busur", "#2A2622", "#443D36") {
-                val updated = session.updateBassDivider(-0.30f, 0.0f, 0.80f)
-                previewBoard.kit = updated
-                refreshHeaderStatus()
-                populateRightDrumConfig(rightContainer, previewBoard, drumCardsContainer)
+            val resetArcBtn = Button(this).apply {
+                text = "↺ Reset"
+                textSize = 9.5f
+                setTextColor(Color.parseColor("#E0D8D0"))
+                isAllCaps = false
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#2B2520"))
+                    cornerRadius = 5f * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#4A3F37"))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (22 * density).toInt()
+                )
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+                setOnClickListener {
+                    val updated = session.updateBassDivider(-0.30f, 0.0f, 0.80f)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                    populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+                }
             }
             bassHeaderRow.addView(resetArcBtn)
-            bassCard.addView(bassHeaderRow)
+            bassBox.addView(bassHeaderRow)
 
-            // Slider dx (-3.0 .. 3.0)
-            bassCard.addView(
-                buildDividerSliderRow(
-                    labelPrefix = "Geser X (dx)",
-                    initialValue = divider.dx,
-                    minVal = -3.0f,
-                    maxVal = 3.0f
-                ) { newDx ->
-                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildDividerSliderRow
+            bassBox.addView(
+                buildCompactDividerSlider("Geser X (dx)", divider.dx, -3.0f, 3.0f) { newDx ->
+                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
                     runCatching {
                         val updated = session.updateBassDivider(newDx, curDiv.dy, curDiv.r)
                         previewBoard.kit = updated
@@ -711,15 +633,9 @@ class DevAuthoringActivity : Activity() {
                 }
             )
 
-            // Slider dy (-3.0 .. 3.0)
-            bassCard.addView(
-                buildDividerSliderRow(
-                    labelPrefix = "Geser Y (dy)",
-                    initialValue = divider.dy,
-                    minVal = -3.0f,
-                    maxVal = 3.0f
-                ) { newDy ->
-                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildDividerSliderRow
+            bassBox.addView(
+                buildCompactDividerSlider("Geser Y (dy)", divider.dy, -3.0f, 3.0f) { newDy ->
+                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
                     runCatching {
                         val updated = session.updateBassDivider(curDiv.dx, newDy, curDiv.r)
                         previewBoard.kit = updated
@@ -728,15 +644,9 @@ class DevAuthoringActivity : Activity() {
                 }
             )
 
-            // Slider r (0.10 .. 3.00)
-            bassCard.addView(
-                buildDividerSliderRow(
-                    labelPrefix = "Jari-jari (r)",
-                    initialValue = divider.r,
-                    minVal = 0.10f,
-                    maxVal = 3.0f
-                ) { newR ->
-                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildDividerSliderRow
+            bassBox.addView(
+                buildCompactDividerSlider("Lengkungan (r)", divider.r, 0.10f, 3.0f) { newR ->
+                    val curDiv = session.workingKit?.drums?.firstOrNull { it.model == "bass" }?.divider ?: return@buildCompactDividerSlider
                     runCatching {
                         val updated = session.updateBassDivider(curDiv.dx, curDiv.dy, newR)
                         previewBoard.kit = updated
@@ -745,12 +655,12 @@ class DevAuthoringActivity : Activity() {
                 }
             )
 
-            rightContainer.addView(bassCard)
+            rightContainer.addView(bassBox)
         }
     }
 
-    private fun buildDividerSliderRow(
-        labelPrefix: String,
+    private fun buildCompactDividerSlider(
+        label: String,
         initialValue: Float,
         minVal: Float,
         maxVal: Float,
@@ -760,24 +670,23 @@ class DevAuthoringActivity : Activity() {
         val row = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(0, (3 * density).toInt(), 0, (3 * density).toInt())
         }
 
         val labelTv = TextView(this).apply {
-            text = "$labelPrefix:"
-            textSize = 11f
-            setTextColor(Color.parseColor("#BDBDBD"))
-            layoutParams = LinearLayout.LayoutParams((86 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
+            text = label
+            textSize = 10f
+            setTextColor(Color.parseColor("#E0D8D0"))
+            layoutParams = LinearLayout.LayoutParams((78 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
         }
         row.addView(labelTv)
 
         val valueTv = TextView(this).apply {
             text = String.format("%.2f", initialValue)
-            textSize = 11f
+            textSize = 10f
             setTextColor(Color.parseColor("#00E5FF"))
             paint.isFakeBoldText = true
             gravity = Gravity.END
-            layoutParams = LinearLayout.LayoutParams((44 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = LinearLayout.LayoutParams((36 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
         }
 
         val maxSteps = ((maxVal - minVal) * 100f).roundToInt().coerceAtLeast(1)
@@ -786,7 +695,7 @@ class DevAuthoringActivity : Activity() {
         val seek = SeekBar(this).apply {
             max = maxSteps
             progress = initialProg
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+            layoutParams = LinearLayout.LayoutParams(0, (24 * density).toInt(), 1.0f)
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
                 override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (!fromUser) return
@@ -804,65 +713,20 @@ class DevAuthoringActivity : Activity() {
     }
 
     // =========================================================================
-    // Halaman Mode Uji Main Penuh
+    // Halaman Mode Uji Main Penuh (100% Full Screen di bawah Header)
     // =========================================================================
 
     private fun buildTestPlayPage(): View {
-        val density = resources.displayMetrics.density
         val kit = session.workingKit ?: return TextView(this)
-
-        val root = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setBackgroundColor(Color.parseColor("#141210"))
-        }
-
-        val boardView = KendangBoardView(this).apply {
+        return KendangBoardView(this).apply {
             mode = KendangBoardView.BoardMode.PLAY
             showZoneGuides = showGuidesInTestPlay
+            showZoneTextBadges = false
+            fullScreenEdgeToEdge = true
+            fitInsidePanel = false
             this.kit = kit
             this.slotByZoneId = activeSlotMap
         }
-
-        val subBar = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            setBackgroundColor(Color.parseColor("#181512"))
-            setPadding((12 * density).toInt(), (4 * density).toInt(), (12 * density).toInt(), (4 * density).toInt())
-        }
-
-        val lastHitText = TextView(this).apply {
-            text = "▶ Uji Main Aktif — Ketuk kendang untuk menguji suara & rolling"
-            textSize = 11.5f
-            setTextColor(Color.parseColor("#81C784"))
-            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
-        }
-        subBar.addView(lastHitText)
-
-        boardView.onZoneHitListener = { drum, zone ->
-            val soundInfo = zone.sound ?: "Belum ada suara"
-            lastHitText.text = "Ketukan: [${formatDrumDisplayName(drum.id)}] Zona ${zone.id} • Volume ${String.format("%.2fx", zone.gain)} • $soundInfo"
-        }
-
-        val toggleGuidesBtn = createActionButton(
-            if (showGuidesInTestPlay) "Sembunyikan Garis Zona" else "Tampilkan Garis Zona",
-            "#2A2622",
-            "#443D36"
-        ) {
-            showGuidesInTestPlay = !showGuidesInTestPlay
-            boardView.showZoneGuides = showGuidesInTestPlay
-            renderCurrentModeContent()
-        }
-        subBar.addView(toggleGuidesBtn)
-
-        root.addView(
-            subBar,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, (36 * density).toInt())
-        )
-        root.addView(
-            boardView,
-            LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1.0f)
-        )
-        return root
     }
 
     // =========================================================================
@@ -906,7 +770,7 @@ class DevAuthoringActivity : Activity() {
         layout.addView(nameLabel)
 
         val nameEdit = EditText(this).apply {
-            hint = "Contoh: Kendang Koplo Panggung"
+            hint = "Contoh: Koplotan Panggung"
             setSingleLine(true)
         }
         layout.addView(nameEdit)
@@ -920,7 +784,7 @@ class DevAuthoringActivity : Activity() {
         layout.addView(idLabel)
 
         val idEdit = EditText(this).apply {
-            hint = "contoh: kendang-koplo-panggung"
+            hint = "contoh: koplotan-panggung"
             setSingleLine(true)
         }
         layout.addView(idEdit)
@@ -1027,7 +891,7 @@ class DevAuthoringActivity : Activity() {
                         AudioEngine.triggerSound(slot, gain)
                         Toast.makeText(
                             this,
-                            "✓ WAV dipasang ke ${selectedZoneId} (${res.sampleRate} Hz)",
+                            "✓ WAV dipasang ke $selectedZoneId (${res.sampleRate} Hz)",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
@@ -1046,7 +910,6 @@ class DevAuthoringActivity : Activity() {
                     val input = contentResolver.openInputStream(uri)
                         ?: throw IllegalStateException("Tidak dapat membaca berkas yang dipilih")
                     val importedKit = input.use { session.openKitPackage(it, uri, cacheDir) }
-                    // Simpan juga hasil impor ke penyimpanan internal agar langsung tersedia di Pilih Kit
                     session.saveCurrentEditToInternalStorage(internalKitsDir)
                     getSharedPreferences(KitSelectActivity.PREFS_NAME, MODE_PRIVATE)
                         .edit()
@@ -1116,18 +979,18 @@ class DevAuthoringActivity : Activity() {
     }
 
     // =========================================================================
-    // Helper Pembangun Komponen UI
+    // Helper Pembangun Komponen UI Ringkas
     // =========================================================================
 
-    private fun createCardContainer(): LinearLayout {
+    private fun createCompactBox(): LinearLayout {
         val density = resources.displayMetrics.density
         return LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
+            setPadding((10 * density).toInt(), (6 * density).toInt(), (10 * density).toInt(), (6 * density).toInt())
             background = GradientDrawable().apply {
-                setColor(Color.parseColor("#1F1C19"))
-                cornerRadius = 10f * density
-                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#332D28"))
+                setColor(Color.parseColor("#241E1A"))
+                cornerRadius = 8f * density
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#38302A"))
             }
         }
     }
@@ -1152,25 +1015,26 @@ class DevAuthoringActivity : Activity() {
             }
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT,
-                (32 * density).toInt()
+                (30 * density).toInt()
             ).apply {
                 marginEnd = (6 * density).toInt()
             }
-            setPadding((11 * density).toInt(), 0, (11 * density).toInt(), 0)
+            setPadding((10 * density).toInt(), 0, (10 * density).toInt(), 0)
             setOnClickListener { onClick() }
         }
     }
 
-    private fun createActionButton(
+    private fun createCompactActionButton(
         label: String,
         bgHex: String,
         strokeHex: String,
+        weight: Float,
         onClick: () -> Unit
     ): Button {
         val density = resources.displayMetrics.density
         return Button(this).apply {
             text = label
-            textSize = 10.5f
+            textSize = 10f
             setTextColor(Color.WHITE)
             isAllCaps = false
             paint.isFakeBoldText = true
@@ -1180,18 +1044,25 @@ class DevAuthoringActivity : Activity() {
                 setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor(strokeHex))
             }
             layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                (28 * density).toInt()
+                0,
+                (26 * density).toInt(),
+                weight
             ).apply {
-                marginStart = (5 * density).toInt()
+                marginEnd = (4 * density).toInt()
             }
-            setPadding((10 * density).toInt(), 0, (10 * density).toInt(), 0)
+            setPadding(0, 0, 0, 0)
             setOnClickListener { onClick() }
         }
     }
 
     private fun applyImmersiveStickyMode() {
         runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                window.attributes = window.attributes.apply {
+                    layoutInDisplayCutoutMode =
+                        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+                }
+            }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 window.setDecorFitsSystemWindows(false)
                 window.insetsController?.let { controller ->
