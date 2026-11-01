@@ -93,23 +93,35 @@ class KitValidatorTest {
 
     @Test
     fun testGeometryRangeViolations() {
-        // Center di luar 0.0..1.0
+        // Center di luar rentang -3.0..3.0
         val kitBadCenter = createValidKit().copy(
             drums = listOf(
-                createValidKit().drums[0].copy(center = Point(1.2f, -0.1f))
+                createValidKit().drums[0].copy(center = Point(3.5f, -3.2f))
             )
         )
         val errorsCenter = KitValidator.validate(kitBadCenter)
         assertTrue(errorsCenter.any { it.contains("center") })
 
-        // Radius <= 0 atau > 1.0
+        // Radius <= 0 atau > 5.0
         val kitBadRadius = createValidKit().copy(
             drums = listOf(
-                createValidKit().drums[0].copy(radius = Radius(-0.1f, 1.5f))
+                createValidKit().drums[0].copy(radius = Radius(-0.1f, 5.5f))
             )
         )
         val errorsRadius = KitValidator.validate(kitBadRadius)
         assertTrue(errorsRadius.any { it.contains("Radius") })
+
+        // Center sebagian keluar kanvas (-0.5, 1.2) dan radius perbesaran skala (1.5) tetap valid
+        val kitAllowedGeometry = createValidKit().copy(
+            drums = listOf(
+                createValidKit().drums[0].copy(
+                    center = Point(-0.5f, 1.2f),
+                    radius = Radius(1.5f, 1.5f)
+                )
+            )
+        )
+        val errorsAllowed = KitValidator.validate(kitAllowedGeometry)
+        assertTrue(errorsAllowed.isEmpty(), "Geometry within extended range should be valid: $errorsAllowed")
 
         // canvasAspect <= 0
         val kitBadAspect = createValidKit().copy(canvasAspect = -1.0f)

@@ -54,12 +54,12 @@ object KitValidator {
         }
 
         for (drum in kit.drums) {
-            // Center dan Radius
-            if (drum.center.x !in 0.0f..1.0f || drum.center.y !in 0.0f..1.0f) {
-                errors.add("Koordinat center drum '${drum.id}' harus di rentang 0.0..1.0 (ditemukan: x=${drum.center.x}, y=${drum.center.y})")
+            // Center dan Radius (mendukung hingga 5x scale dan off-canvas drag dengan batas retensi)
+            if (drum.center.x !in -3.0f..3.0f || drum.center.y !in -3.0f..3.0f) {
+                errors.add("Koordinat center drum '${drum.id}' harus di rentang -3.0..3.0 (ditemukan: x=${drum.center.x}, y=${drum.center.y})")
             }
-            if (drum.radius.rx <= 0.0f || drum.radius.rx > 1.0f || drum.radius.ry <= 0.0f || drum.radius.ry > 1.0f) {
-                errors.add("Radius rx dan ry drum '${drum.id}' harus > 0.0 dan <= 1.0 (ditemukan: rx=${drum.radius.rx}, ry=${drum.radius.ry})")
+            if (drum.radius.rx <= 0.0f || drum.radius.rx > 5.0f || drum.radius.ry <= 0.0f || drum.radius.ry > 5.0f) {
+                errors.add("Radius rx dan ry drum '${drum.id}' harus > 0.0 dan <= 5.0 (ditemukan: rx=${drum.radius.rx}, ry=${drum.radius.ry})")
             }
 
             // 3. Validasi Model dan Region

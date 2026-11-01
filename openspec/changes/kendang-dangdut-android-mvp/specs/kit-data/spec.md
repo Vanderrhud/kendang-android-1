@@ -106,11 +106,11 @@ Sistem koordinat kit SHALL mendefinisikan `canvasAspect` sebagai rasio lebar ter
 - **THEN** drum tersebut dirender dan dihitung hit-testing-nya sebagai lingkaran sejati (bukan elips) pada perangkat dengan berbagai rasio layar
 
 ### Requirement: Layout override pemain (posisi dan ukuran saja)
-Sistem SHALL memisahkan penyimpanan kustomisasi tata letak pemain sebagai file override kecil per kit (`files/layouts/<kitId>.json`). Nilai `scale` SHALL dibatasi di rentang 0.5–1.5 dan `center` SHALL dijepit ke batas kanvas. `id` kendang yang tidak dikenal dalam file override SHALL diabaikan; file override yang rusak atau tidak dapat dibaca SHALL diabaikan sehingga tata letak bawaan tetap dipakai tanpa crash; dan kit efektif hasil penggabungan SHALL tetap lolos validasi `KitValidator`.
+Sistem SHALL memisahkan penyimpanan kustomisasi tata letak pemain sebagai file override kecil per kit (`files/layouts/<kitId>.json`). Nilai `scale` SHALL dibatasi di rentang 0.5–5.0 dan `center` SHALL dijepit dengan batas retensi aman sehingga setidaknya 20% radius kendang tetap berada di kanvas dan mengizinkan posisi kendang digeser sebagian keluar batas kanvas. `id` kendang yang tidak dikenal dalam file override SHALL diabaikan; file override yang rusak atau tidak dapat dibaca SHALL diabaikan sehingga tata letak bawaan tetap dipakai tanpa crash; dan kit efektif hasil penggabungan SHALL tetap lolos validasi `KitValidator`.
 
 #### Scenario: Override posisi dan skala diterapkan dan dijepit ke batas valid
-- **WHEN** pemain menyimpan override dengan perubahan posisi dan skala
-- **THEN** posisi diterapkan, skala dijepit di 0.5–1.5, dan drum tetap berada di dalam kanvas
+- **WHEN** pemain menyimpan override dengan perubahan posisi (termasuk di luar batas 0.0..1.0) dan skala hingga 5.0
+- **THEN** posisi diterapkan dengan retensi aman, skala dijepit di 0.5–5.0, dan kit lolos validasi KitValidator
 
 #### Scenario: ID tidak dikenal diabaikan dan file override rusak fallback ke bawaan
 - **WHEN** file override berisi ID kendang yang tidak ada atau berkas override rusak

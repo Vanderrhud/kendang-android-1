@@ -275,7 +275,7 @@ class CalibrationOverlayView @JvmOverloads constructor(
             canvasAspect = currentWorking.canvasAspect
         )
 
-        // Skala 0.50x s.d. maxAdaptive (maks 1.50x)
+        // Skala 0.50x s.d. maxAdaptive (maks 5.00x)
         val effectiveMax = minOf(LayoutMerger.MAX_SCALE, maxAdaptive)
         val currentScale = scalesByDrumId[drum.id] ?: 1.0f
         val clampedScale = currentScale.coerceIn(LayoutMerger.MIN_SCALE, effectiveMax)

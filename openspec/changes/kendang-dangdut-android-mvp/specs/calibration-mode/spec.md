@@ -28,27 +28,27 @@ Pemain SHALL dapat memilih kendang dengan mengetuknya; kendang terpilih SHALL di
 - **WHEN** pemain menyentuh area kosong kanvas di luar kendang mana pun
 - **THEN** kendang yang sedang terpilih sebelumnya tetap terpilih
 
-### Requirement: Geser kendang dengan satu jari dan penjepitan ke batas kanvas
-Pemain SHALL dapat menggeser kendang terpilih menggunakan satu jari. Jari tambahan selama penggeseran SHALL diabaikan. Posisi kendang SHALL dijepit secara real-time saat jari bergerak dalam satuan kanvas (merujuk bagian "Kanvas relatif 0.0-1.0 dengan canvasAspect dan aspect-fit" di `design.md`) sehingga seluruh batas oval kendang tetap berada di dalam kanvas dan berhenti tepat di tepi kanvas.
+### Requirement: Geser kendang dengan satu jari dan batas retensi aman kanvas
+Pemain SHALL dapat menggeser kendang terpilih menggunakan satu jari melebihi batas kanvas. Jari tambahan selama penggeseran SHALL diabaikan. Posisi kendang SHALL dijepit secara real-time saat jari bergerak dalam satuan kanvas dengan batas retensi aman (safety retention boundary) sehingga setidaknya 20% radius kendang tetap berada di dalam kanvas agar kendang tidak hilang total dari layar.
 
-#### Scenario: Kendang bergerak mengikuti satu jari dan dijepit di tepi kanvas
-- **WHEN** pemain menggeser kendang terpilih ke arah tepi kanvas
-- **THEN** kendang mengikuti posisi jari dan berhenti saat tepi oval menyentuh batas kanvas, tanpa keluar dari kanvas
+#### Scenario: Kendang dapat digeser melebihi kanvas dan dijepit pada batas retensi aman
+- **WHEN** pemain menggeser kendang terpilih melewati tepi kanvas
+- **THEN** kendang mengikuti posisi jari melebihi batas tepi kanvas dan dijepit pada batas retensi aman sehingga sebagian lingkaran kendang tetap menyentuh kanvas untuk disentuh atau ditarik kembali
 
 #### Scenario: Jari kedua selama proses geser diabaikan
 - **WHEN** pemain meletakkan jari kedua di layar saat jari pertama sedang menggeser kendang
 - **THEN** jari kedua diabaikan dan gerakan kendang tetap dikendalikan oleh jari pertama
 
 ### Requirement: Ubah ukuran kendang dengan gestur cubit dua jari (pinch-to-scale)
-Sistem SHALL memungkinkan pemain mengubah ukuran kendang terpilih secara langsung menggunakan gestur cubit dua jari (`ScaleGestureDetector`) di rentang skala `0.5x–1.5x` tanpa menampilkan bilah bawah atau slider yang menutupi papan. Batas skala maksimum SHALL dijepit secara dinamis agar ukuran efektif kendang tidak melampaui batas kanvas dan selalu lolos validasi `KitValidator` (merujuk bagian "Layout override pemain di Halaman Sesuaikan" di `design.md`).
+Sistem SHALL memungkinkan pemain mengubah ukuran kendang terpilih secara langsung menggunakan gestur cubit dua jari (`ScaleGestureDetector`) di rentang skala `0.5x–5.0x` (hingga 5 kali lipat) tanpa menampilkan bilah bawah atau slider yang menutupi papan. Batas skala maksimum SHALL mengizinkan perbesaran hingga `5.0x` dan selalu lolos validasi `KitValidator` (merujuk bagian "Layout override pemain di Halaman Sesuaikan" di `design.md`).
 
-#### Scenario: Gestur cubit dua jari mengubah ukuran kendang secara proporsional
+#### Scenario: Gestur cubit dua jari mengubah ukuran kendang secara proporsional hingga 5x
 - **WHEN** pemain mencubit atau merentangkan dua jari pada papan saat suatu kendang terpilih di Halaman Sesuaikan
-- **THEN** nilai `rx` dan `ry` kendang tersebut berubah proporsional secara real-time di layar dalam rentang `0.5x–1.5x`
+- **THEN** nilai `rx` dan `ry` kendang tersebut berubah proporsional secara real-time di layar dalam rentang `0.5x–5.0x`
 
-#### Scenario: Skala maksimum dijepit otomatis di dekat tepi kanvas
-- **WHEN** kendang yang dipilih berada dekat dengan batas kanvas sehingga skala `1.5x` akan melewati tepi kanvas
-- **THEN** batas skala maksimum secara otomatis dijepit sebelum `1.5x` sehingga oval kendang tetap berada di dalam kanvas
+#### Scenario: Skala maksimum mencapai 5x lipat
+- **WHEN** pemain merentangkan dua jari secara maksimal pada kendang terpilih
+- **THEN** batas skala dapat mencapai hingga `5.0x` dari ukuran radius dasar bawaan kit
 
 ### Requirement: Tanpa suara di mode kalibrasi
 Seluruh interaksi sentuhan di mode kalibrasi SHALL tidak membunyikan suara audio dan SHALL tidak mengirimkan event ke antrean audio engine (sesuai spesifikasi `kendang-board`).

@@ -40,16 +40,27 @@ class LayoutMergerTest {
     fun testScaleClampingLimits() {
         val base = createBaseKit()
 
-        // Skala 2.0 (di atas 1.5) dijepit ke maks 1.5
+        // Skala 6.0 (di atas 5.0) dijepit ke maks 5.0
         val overrideHigh = LayoutOverride(
+            kitId = "new-metro",
+            drums = mapOf(
+                "kecil1" to DrumOverride(scale = 6.0f)
+            )
+        )
+        val resultHigh = LayoutMerger.apply(base, overrideHigh)
+        val drumHigh = resultHigh.drums.first { it.id == "kecil1" }
+        assertEquals(0.15f * 5.0f, drumHigh.radius.rx, 0.001f)
+
+        // Skala 2.0 (di antara 0.5..5.0) dipertahankan
+        val overrideMid = LayoutOverride(
             kitId = "new-metro",
             drums = mapOf(
                 "kecil1" to DrumOverride(scale = 2.0f)
             )
         )
-        val resultHigh = LayoutMerger.apply(base, overrideHigh)
-        val drumHigh = resultHigh.drums.first { it.id == "kecil1" }
-        assertEquals(0.15f * 1.5f, drumHigh.radius.rx, 0.001f)
+        val resultMid = LayoutMerger.apply(base, overrideMid)
+        val drumMid = resultMid.drums.first { it.id == "kecil1" }
+        assertEquals(0.15f * 2.0f, drumMid.radius.rx, 0.001f)
 
         // Skala 0.1 (di bawah 0.5) dijepit ke min 0.5
         val overrideLow = LayoutOverride(
@@ -65,33 +76,41 @@ class LayoutMergerTest {
 
     @Test
     fun testAdaptiveScaleNearCanvasEdge() {
-        val base = createBaseKit()
-
-        // Kendang berada sangat dekat tepi atas (y = 0.15, radius ry = 0.20)
-        // Jika scale = 1.0, ry = 0.20 > y (0.15), skala adaptif akan membatasi agar tidak keluar
         val centerNearTop = Point(0.50f, 0.15f)
         val maxAdaptive = LayoutMerger.calculateMaxAdaptiveScale(centerNearTop, Radius(0.20f, 0.20f), 2.0f)
-        assertTrue(maxAdaptive <= (0.15f / 0.20f) + 0.001f)
+        assertEquals(LayoutMerger.MAX_SCALE, maxAdaptive, 0.001f)
     }
 
     @Test
     fun testCenterOutOfBoundsClampedToCanvas() {
         val base = createBaseKit()
 
-        // Center keluar kanvas x = 1.5, y = -0.5
+        // Center keluar kanvas x = 5.0, y = -5.0
         val overrideOOB = LayoutOverride(
             kitId = "new-metro",
             drums = mapOf(
-                "bass" to DrumOverride(center = Point(1.5f, -0.5f), scale = 1.0f)
+                "bass" to DrumOverride(center = Point(5.0f, -5.0f), scale = 1.0f)
             )
         )
         val result = LayoutMerger.apply(base, overrideOOB)
         val bass = result.drums.first { it.id == "bass" }
 
-        assertTrue(bass.center.x <= 1.0f)
-        assertTrue(bass.center.x >= 0.0f)
-        assertTrue(bass.center.y <= 1.0f)
-        assertTrue(bass.center.y >= 0.0f)
+        // Dengan safety retention:
+        // horizontalRetention = (0.20 / 2.0) * 0.8 = 0.08 => maxX = 1.08
+        // verticalRetention = 0.20 * 0.8 = 0.16 => minY = -0.16
+        assertEquals(1.08f, bass.center.x, 0.001f)
+        assertEquals(-0.16f, bass.center.y, 0.001f)
+
+        // Posisi negatif yang berada dalam batas retensi (-0.05 >= -0.08) dipertahankan
+        val overridePartialOff = LayoutOverride(
+            kitId = "new-metro",
+            drums = mapOf(
+                "bass" to DrumOverride(center = Point(-0.05f, 0.50f), scale = 1.0f)
+            )
+        )
+        val resultPartial = LayoutMerger.apply(base, overridePartialOff)
+        val bassPartial = resultPartial.drums.first { it.id == "bass" }
+        assertEquals(-0.05f, bassPartial.center.x, 0.001f)
     }
 
     @Test

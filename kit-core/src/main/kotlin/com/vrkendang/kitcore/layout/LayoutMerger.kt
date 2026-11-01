@@ -12,7 +12,7 @@ import kotlin.math.min
 object LayoutMerger {
 
     const val MIN_SCALE = 0.5f
-    const val MAX_SCALE = 1.5f
+    const val MAX_SCALE = 5.0f
 
     private val json = Json {
         ignoreUnknownKeys = true
@@ -20,49 +20,46 @@ object LayoutMerger {
     }
 
     /**
-     * Menghitung batas skala maksimum adaptif agar kendang tidak keluar dari batas kanvas
-     * berdasarkan posisi center saat ini dan radius dasarnya.
+     * Menghitung batas skala maksimum adaptif untuk kendang.
+     * Mengizinkan perbesaran skala hingga MAX_SCALE (5.0f).
      */
     fun calculateMaxAdaptiveScale(
         center: Point,
         radius: Radius,
         canvasAspect: Float
     ): Float {
-        val aspect = max(0.1f, canvasAspect)
-        val xu = center.x * aspect
-        val yu = center.y
-
-        val maxScaleLeft = if (radius.rx > 0f) xu / radius.rx else MAX_SCALE
-        val maxScaleRight = if (radius.rx > 0f) (aspect - xu) / radius.rx else MAX_SCALE
-        val maxScaleTop = if (radius.ry > 0f) yu / radius.ry else MAX_SCALE
-        val maxScaleBottom = if (radius.ry > 0f) (1.0f - yu) / radius.ry else MAX_SCALE
-
-        val boundaryMax = min(min(maxScaleLeft, maxScaleRight), min(maxScaleTop, maxScaleBottom))
-        return min(MAX_SCALE, max(MIN_SCALE, boundaryMax))
+        return MAX_SCALE
     }
 
     /**
-     * Menjepit koordinat center agar seluruh lingkaran/oval kendang tetap berada di dalam kanvas.
+     * Menjepit koordinat center agar kendang tetap memiliki bagian yang berada di kanvas
+     * (safety retention boundary) sekaligus mengizinkan kendang digeser sebagian ke luar kanvas.
+     * Mempertahankan setidaknya 20% radius di dalam batas kanvas (80% boleh berada di luar).
      */
     fun clampCenter(
         center: Point,
         radius: Radius,
         canvasAspect: Float,
-        scale: Float
+        scale: Float = 1.0f
     ): Point {
         val aspect = max(0.1f, canvasAspect)
         val rxEff = radius.rx * scale
         val ryEff = radius.ry * scale
 
-        // Batas horizontal (x dalam rentang 0.0..1.0)
-        val minX = rxEff / aspect
-        val maxX = 1.0f - (rxEff / aspect)
-        val clampedX = if (minX >= maxX) 0.5f else center.x.coerceIn(minX, maxX)
+        // Toleransi retensi pengaman (safety retention):
+        // center.x + (rxEff / aspect) >= 0.2f * (rxEff / aspect) => center.x >= -0.8f * (rxEff / aspect)
+        // center.x - (rxEff / aspect) <= 1.0f - 0.2f * (rxEff / aspect) => center.x <= 1.0f + 0.8f * (rxEff / aspect)
+        val horizontalRetention = (rxEff / aspect) * 0.8f
+        val minX = -horizontalRetention
+        val maxX = 1.0f + horizontalRetention
+        val clampedX = center.x.coerceIn(minX, maxX)
 
-        // Batas vertikal (y dalam rentang 0.0..1.0)
-        val minY = ryEff
-        val maxY = 1.0f - ryEff
-        val clampedY = if (minY >= maxY) 0.5f else center.y.coerceIn(minY, maxY)
+        // center.y + ryEff >= 0.2f * ryEff => center.y >= -0.8f * ryEff
+        // center.y - ryEff <= 1.0f - 0.2f * ryEff => center.y <= 1.0f + 0.8f * ryEff
+        val verticalRetention = ryEff * 0.8f
+        val minY = -verticalRetention
+        val maxY = 1.0f + verticalRetention
+        val clampedY = center.y.coerceIn(minY, maxY)
 
         return Point(clampedX, clampedY)
     }
@@ -78,7 +75,7 @@ object LayoutMerger {
         val updatedDrums = baseKit.drums.map { drum ->
             val drumOverride = override.drums[drum.id]
             if (drumOverride != null) {
-                // 1. Skala dijepit ke batas adaptif dan 0.5..1.5
+                // 1. Skala dijepit ke rentang 0.5..5.0
                 val rawScale = drumOverride.scale ?: 1.0f
                 val clampedScale = rawScale.coerceIn(MIN_SCALE, MAX_SCALE)
 
@@ -86,7 +83,7 @@ object LayoutMerger {
                 val maxAdaptive = calculateMaxAdaptiveScale(targetCenter, drum.radius, baseKit.canvasAspect)
                 val finalScale = min(clampedScale, maxAdaptive)
 
-                // 2. Center dijepit ke kanvas
+                // 2. Center dijepit dengan batas retensi aman kanvas
                 val clampedCenter = clampCenter(targetCenter, drum.radius, baseKit.canvasAspect, finalScale)
 
                 drum.copy(

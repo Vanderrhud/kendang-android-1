@@ -240,7 +240,7 @@ Paket hanya memuat file WAV yang dirujuk oleh `kit.json`, dengan nama `sounds/<z
 
 **Aturan validasi (`KitValidator` di `:kit-core`):**
 - `formatVersion` dikenali; `kitId` hanya huruf kecil, angka, dan tanda hubung; `drums` tidak kosong; semua `id` unik.
-- `canvasAspect` > 0; `center.x`/`center.y` di 0.0-1.0; `rx`, `ry` > 0 dan wajar (≤ 1.0).
+- `canvasAspect` > 0; `center.x`/`center.y` di rentang -3.0 sampai 3.0 (mengizinkan kendang digeser sebagian keluar kanvas); `rx`, `ry` > 0 dan ≤ 5.0 (mengizinkan perbesaran skala hingga 5x lipat).
 - `gain` di rentang 0.0-2.0.
 - Parameter `divider` model `bass`: `dx` dan `dy` di rentang -3.0 sampai 3.0 (relatif terhadap radius Bass), serta `r` > 0 dan ≤ 3.0. Rentang ini ditetapkan agar busur tetap wajar dan dapat diuji.
 - Region sesuai model (`bass`: `main` dan `crescent` dengan `band` 0-3 dan `divider` wajib; `split`: `upper` dan `lower`; `single`: `full`).
@@ -252,8 +252,8 @@ Paket hanya memuat file WAV yang dirujuk oleh `kit.json`, dengan nama `sounds/<z
 ### D11: Layout override pemain di Halaman Sesuaikan (geser 1 jari dan cubit 2 jari)
 
 **Keputusan:** Halaman Sesuaikan (`Sesuaikan` dari menu `☰ Menu`) dikhususkan murni untuk pemain mengatur posisi dan ukuran 4 kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`) secara langsung di atas kanvas tanpa bilah bawah atau slider yang menutupi kendang:
-- **Geser 1 jari** memindahkan posisi kendang terpilih.
-- **Cubit 2 jari (`ScaleGestureDetector`)** mengubah skala ukuran kendang terpilih secara proporsional di rentang `0.5x–1.5x`.
+- **Geser 1 jari** memindahkan posisi kendang terpilih, dapat digeser sebagian melebihi kanvas dengan batas retensi aman (safety retention: mempertahankan setidaknya 20% radius di dalam batas kanvas agar kendang tidak hilang total).
+- **Cubit 2 jari (`ScaleGestureDetector`)** mengubah skala ukuran kendang terpilih secara proporsional di rentang `0.5x–5.0x` (hingga 5 kali lipat).
 - Header bagian atas hanya memuat `✕ Batal` (kiri), petunjuk ringkas di tengah (`"Sesuaikan: Geser kendang untuk pindah posisi • Cubit 2 jari untuk ubah ukuran"`), serta `↺ Reset` dan `✓ Simpan` (kanan).
 
 Edit tata letak pemain tidak menyalin file audio. Aplikasi menyimpan file kecil per kit di `files/layouts/<kitId>.json`:
@@ -263,13 +263,13 @@ Edit tata letak pemain tidak menyalin file audio. Aplikasi menyimpan file kecil 
   "kitId": "new-metro",
   "baseVersion": 1,
   "drums": {
-    "bass": { "center": { "x": 0.28, "y": 0.55 }, "scale": 1.1 }
+    "bass": { "center": { "x": -0.15, "y": 0.55 }, "scale": 2.5 }
   }
 }
 ```
 
 Saat kit dimuat, `LayoutOverride.apply(kit, override)` (di `:kit-core`) menghasilkan kit efektif:
-- `scale` dibatasi di rentang 0.5–1.5, dan `center` dijepit agar seluruh batas oval kendang tetap berada di dalam kanvas.
+- `scale` dibatasi di rentang 0.5–5.0, dan `center` dijepit dengan batas retensi aman sehingga setidaknya 20% radius kendang tetap menyentuh kanvas.
 - ID kendang yang tidak dikenal dalam file override diabaikan.
 - File override yang rusak atau tidak dapat dibaca diabaikan sehingga tata letak bawaan tetap dipakai tanpa crash.
 - Penulisan override dilakukan secara atomik (tulis ke file sementara `.tmp` lalu ganti nama) untuk mencegah kerusakan berkas bila penulisan terputus.

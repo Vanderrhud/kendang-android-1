@@ -873,7 +873,7 @@ class KendangBoardView @JvmOverloads constructor(
                                 y = dragStartCenter.y + deltaY
                             )
 
-                            // Jepit posisi center agar oval tetap berada di dalam kanvas
+                            // Jepit posisi center dengan batas retensi aman agar kendang tidak hilang dari kanvas
                             val clampKit = effectiveKitForHitAndClamp(currentKit)
                             val clampedCenter = LayoutMerger.clampCenter(
                                 center = proposedCenter,
