@@ -6,6 +6,8 @@ Panduan ini berlaku untuk seluruh pekerjaan di repositori ini, bukan hanya untuk
 
 - Sebelum mengubah apa pun, periksa struktur repo, `git status`, dan instruksi yang lebih spesifik di direktori terkait.
 - Jaga perubahan kecil, dapat ditinjau, dan hanya dalam lingkup permintaan atau task aktif. Jangan memperluas scope, menebak keputusan yang belum ada, atau mengubah dependensi, konfigurasi, maupun artefak lain hanya untuk mengatasi masalah lokal.
+- **Lingkungan Build & Test**: Lingkungan lokal VM ini tidak memiliki JDK/Android SDK/NDK dan dilarang mencoba menginstal package sistem (seperti OpenJDK, apt-get, dll). Semua kompilasi build, test otomatis, dan pembuatan APK dilakukan secara terpusat melalui GitHub Actions CI.
+- **Larangan Modifikasi Spekulatif**: Dilarang berasumsi, mengubah kode, menambah test, atau membuang perubahan kerja (seperti `git restore`) tanpa instruksi eksplisit pengguna. Jika membutuhkan klarifikasi atau ada beberapa opsi, diskusikan terlebih dahulu sebelum bertindak.
 - Jika proyek menggunakan OpenSpec, artefak change aktif adalah sumber kebenaran untuk scope dan kebutuhan perubahan tersebut. `AGENTS.md` ini hanya guardrail umum dan tidak menggantikan atau menambah kebutuhan OpenSpec.
 - Bedakan hasil pemeriksaan statis, test, CI, dan uji manual. Laporkan hanya verifikasi yang benar-benar dilakukan; jangan mengklaim perilaku yang belum dibuktikan.
 
