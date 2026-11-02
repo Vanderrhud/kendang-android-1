@@ -1,52 +1,125 @@
 {
-  "formatVersion": 1,
-  "kitId": "new-metro",
-  "name": "New Metro",
-  "version": 1,
-  "canvasAspect": 2.0,
-  "drums": [
-    {
-      "id": "bass",
-      "model": "bass",
-      "center": { "x": 0.25, "y": 0.55 },
-      "radius": { "rx": 0.30, "ry": 0.30 },
-      "divider": { "dx": -0.30, "dy": 0.0, "r": 0.80 },
-      "zones": [
-        { "id": "bass-1", "region": "main", "sound": null, "gain": 1.0 },
-        { "id": "bass-2", "region": "crescent", "band": 0, "sound": null, "gain": 1.0 },
-        { "id": "bass-3", "region": "crescent", "band": 1, "sound": null, "gain": 1.0 },
-        { "id": "bass-4", "region": "crescent", "band": 2, "sound": null, "gain": 1.0 },
-        { "id": "bass-5", "region": "crescent", "band": 3, "sound": null, "gain": 1.0 }
-      ]
-    },
-    {
-      "id": "kecil1",
-      "model": "single",
-      "center": { "x": 0.52, "y": 0.35 },
-      "radius": { "rx": 0.17, "ry": 0.17 },
-      "zones": [
-        { "id": "kecil1-1", "region": "full", "sound": null, "gain": 1.0 }
-      ]
-    },
-    {
-      "id": "sedang",
-      "model": "split",
-      "center": { "x": 0.66, "y": 0.60 },
-      "radius": { "rx": 0.20, "ry": 0.20 },
-      "zones": [
-        { "id": "sedang-1", "region": "lower", "sound": null, "gain": 1.0 },
-        { "id": "sedang-2", "region": "upper", "sound": null, "gain": 1.0 }
-      ]
-    },
-    {
-      "id": "kecil2",
-      "model": "split",
-      "center": { "x": 0.82, "y": 0.38 },
-      "radius": { "rx": 0.17, "ry": 0.17 },
-      "zones": [
-        { "id": "kecil2-1", "region": "lower", "sound": null, "gain": 1.0 },
-        { "id": "kecil2-2", "region": "upper", "sound": null, "gain": 1.0 }
-      ]
-    }
-  ]
+    "kitId": "new-metro",
+    "name": "New Metro",
+    "version": 23,
+    "drums": [
+        {
+            "id": "kecil2",
+            "model": "split",
+            "center": {
+                "x": 0.82,
+                "y": 0.38
+            },
+            "radius": {
+                "rx": 0.17,
+                "ry": 0.17
+            },
+            "divider": {
+                "angle": 0.0
+            },
+            "zones": [
+                {
+                    "id": "kecil2-1",
+                    "region": "lower",
+                    "sound": "sounds/kecil2-1.wav"
+                },
+                {
+                    "id": "kecil2-2",
+                    "region": "upper",
+                    "sound": "sounds/kecil2-2.wav"
+                }
+            ]
+        },
+        {
+            "id": "sedang",
+            "model": "split",
+            "center": {
+                "x": 0.66,
+                "y": 0.6
+            },
+            "radius": {
+                "rx": 0.2,
+                "ry": 0.2
+            },
+            "zones": [
+                {
+                    "id": "sedang-1",
+                    "region": "lower",
+                    "sound": "sounds/sedang-1.wav"
+                },
+                {
+                    "id": "sedang-2",
+                    "region": "upper",
+                    "sound": "sounds/sedang-2.wav"
+                }
+            ]
+        },
+        {
+            "id": "kecil1",
+            "model": "single",
+            "center": {
+                "x": 0.52,
+                "y": 0.35
+            },
+            "radius": {
+                "rx": 0.17,
+                "ry": 0.17
+            },
+            "zones": [
+                {
+                    "id": "kecil1-1",
+                    "region": "full",
+                    "sound": "sounds/kecil1-1.wav"
+                }
+            ]
+        },
+        {
+            "id": "bass",
+            "model": "bass",
+            "center": {
+                "x": 0.25,
+                "y": 0.55
+            },
+            "radius": {
+                "rx": 0.3,
+                "ry": 0.3
+            },
+            "divider": {
+                "dx": -1.62,
+                "dy": -0.00999999,
+                "r": 1.83,
+                "rx": 1.83,
+                "ry": 0.69,
+                "splits": [
+                    0.333,
+                    0.667
+                ]
+            },
+            "zones": [
+                {
+                    "id": "bass-1",
+                    "region": "main",
+                    "sound": "sounds/bass-1.wav"
+                },
+                {
+                    "id": "bass-2",
+                    "region": "crescent",
+                    "band": 0,
+                    "sound": "sounds/bass-2.wav"
+                },
+                {
+                    "id": "bass-3",
+                    "region": "crescent",
+                    "band": 1,
+                    "sound": "sounds/bass-3.wav"
+                },
+                {
+                    "id": "bass-4",
+                    "region": "crescent",
+                    "band": 2,
+                    "sound": "sounds/bass-4.wav"
+                }
+            ]
+        }
+    ]
 }

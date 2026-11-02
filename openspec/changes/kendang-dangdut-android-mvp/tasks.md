@@ -108,14 +108,14 @@
 
 ## 12. Verifikasi Integrasi & Kriteria Keberhasilan
 
-- [ ] 12.1 Alur Mode Developer end-to-end: buka Mode Developer → buka salinan New Metro atau buat kit baru → pasang file WAV rekaman asli kendang untuk Bass-1 → ketuk Bass-1 → suara berbunyi seketika.
-- [ ] 12.2 Pasangkan file WAV ke seluruh 10 zona kendang → setiap zona bersuara khas sesuai pukulan kendang asli.
-- [ ] 12.3 Verifikasi multi-touch: sentuh 2–5 zona berbeda bersamaan → semua suara terdengar serempak tanpa ada yang terlewat.
-- [ ] 12.4 Verifikasi rolling & stacking: ketuk satu zona berulang cepat → hingga 32 suara menumpuk tanpa terpotong; di atas 32 suara berlaku voice stealing mulus tanpa pop.
-- [ ] 12.5 Verifikasi zona unassigned: ketuk zona yang masih null → tidak ada suara, tidak ada crash; visual tap highlight tetap muncul.
-- [ ] 12.6 Simpan kit yang sudah lengkap via "Simpan" dan "Simpan Sebagai" → file `.vrkendang` tersimpan di HP atau tablet tanpa `.bak`; impor kembali file tersebut → kit dan semua suara termuat sempurna, dan paket hanya berisi WAV yang dirujuk.
-- [ ] 12.7 Verifikasi CI end-to-end: build manual dan push kode menghasilkan workflow sukses; unit test `:kit-core` + validasi kit bawaan lulus; `assembleRelease` berhasil dan dex release tidak memuat kode Mode Developer; APK debug ditandatangani keystore debug tetap dan hanya berisi ABI `arm64-v8a`/`armeabi-v7a`; tidak ada task Gradle yang menghasilkan file `.wav`; kit bawaan MVP New Metro hanya `kit.json` dengan semua sound null; artifact APK bernama `VRKendang-Debug-<sha7>` (retensi 7 hari); laporan tes terunggah saat test gagal; saat kompilasi C++ NDK atau Kotlin sengaja digagalkan, log menampilkan nama file dan baris penyebab.
-- [ ] 12.8 Verifikasi rilis kit bawaan: ekstrak paket `.vrkendang` valid apa adanya ke `assets/kits/<kitId>/` → `kit.json` di akar dan WAV di `sounds/` lolos validasi kit bawaan; ikuti langkah ekstrak, commit, dan push di README/`docs/rilis-kit.md` dan tasks.md.
+- [x] 12.1 Alur Mode Developer end-to-end: buka Mode Developer → buka salinan New Metro atau buat kit baru → pasang file WAV rekaman asli kendang untuk Bass-1 → ketuk Bass-1 → suara berbunyi seketika.
+- [x] 12.2 Pasangkan file WAV ke seluruh 10 zona kendang → setiap zona bersuara khas sesuai pukulan kendang asli.
+- [x] 12.3 Verifikasi multi-touch: sentuh 2–5 zona berbeda bersamaan → semua suara terdengar serempak tanpa ada yang terlewat.
+- [x] 12.4 Verifikasi rolling & stacking: ketuk satu zona berulang cepat → hingga 32 suara menumpuk tanpa terpotong; di atas 32 suara berlaku voice stealing mulus tanpa pop.
+- [x] 12.5 Verifikasi zona unassigned: ketuk zona yang masih null → tidak ada suara, tidak ada crash; visual tap highlight tetap muncul.
+- [x] 12.6 Simpan kit yang sudah lengkap via "Simpan" dan "Simpan Sebagai" → file `.vrkendang` tersimpan di HP atau tablet tanpa `.bak`; impor kembali file tersebut → kit dan semua suara termuat sempurna, dan paket hanya berisi WAV yang dirujuk.
+- [x] 12.7 Verifikasi CI end-to-end: build manual dan push kode menghasilkan workflow sukses; unit test `:kit-core` + validasi kit bawaan lulus; `assembleRelease` berhasil dan dex release tidak memuat kode Mode Developer; APK debug ditandatangani keystore debug tetap dan hanya berisi ABI `arm64-v8a`/`armeabi-v7a`; tidak ada task Gradle yang menghasilkan file `.wav`; kit bawaan MVP New Metro hanya `kit.json` dengan semua sound null; artifact APK bernama `VRKendang-Debug-<sha7>` (retensi 7 hari); laporan tes terunggah saat test gagal; saat kompilasi C++ NDK atau Kotlin sengaja digagalkan, log menampilkan nama file dan baris penyebab.
+- [x] 12.8 Verifikasi rilis kit bawaan: ekstrak paket `.vrkendang` valid apa adanya ke `assets/kits/<kitId>/` → `kit.json` di akar dan WAV di `sounds/` lolos validasi kit bawaan; ikuti langkah ekstrak, commit, dan push di README/`docs/rilis-kit.md` dan tasks.md.
 
 ## Workflow Follow-up
 
