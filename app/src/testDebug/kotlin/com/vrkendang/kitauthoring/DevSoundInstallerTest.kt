@@ -37,7 +37,13 @@ class DevSoundInstallerTest {
         )
         val file = candidates.firstOrNull { it.isFile }
             ?: error("kit.json New Metro tidak ditemukan")
-        return file.readText()
+        val parsed = KitJsonParser.parse(file.readText())
+        val clean = parsed.copy(
+            drums = parsed.drums.map { drum ->
+                drum.copy(zones = drum.zones.map { it.copy(sound = null) })
+            }
+        )
+        return KitJsonParser.stringify(clean)
     }
 
     /** Membangun WAV PCM 16-bit mono minimal yang valid. */

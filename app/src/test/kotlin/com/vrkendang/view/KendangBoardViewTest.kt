@@ -39,8 +39,13 @@ class KendangBoardViewTest {
 
     @Test
     fun testUnassignedZoneTapTriggersHighlightWithoutAudio() {
-        // Kit bawaan New Metro memiliki sound: null pada seluruh zona
-        val kit = loadNewMetroKit()
+        // Kit dengan zona sound: null
+        val baseKit = loadNewMetroKit()
+        val kit = baseKit.copy(
+            drums = baseKit.drums.map { drum ->
+                drum.copy(zones = drum.zones.map { it.copy(sound = null) })
+            }
+        )
         val fakeEngine = FakeAudioEngine()
 
         val boardView = KendangBoardView(object : android.content.ContextWrapper(null) {})
