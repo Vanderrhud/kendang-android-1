@@ -7,11 +7,11 @@ Mendefinisikan format data kit kendang berbasis JSON, perilaku sistem dalam memb
 ## ADDED Requirements
 
 ### Requirement: Satu kit adalah satu folder mandiri di dalam APK
-Setiap kit kendang SHALL direpresentasikan sebagai satu folder di `assets/kits/<kitId>/` yang berisi `kit.json` dan folder `sounds/` untuk WAV bila ada. Pada rilis MVP, kit bawaan New Metro hanya berisi `kit.json` dengan seluruh zona berstatus `"sound": null`. Kit bawaan yang dirilis kemudian dari paket `.vrkendang` boleh menyertakan `sounds/*.wav`.
+Setiap kit kendang SHALL direpresentasikan sebagai satu folder di `assets/kits/<kitId>/` yang berisi `kit.json` dan folder `sounds/` untuk WAV. Kit bawaan New Metro berisi `kit.json` dan sampel rekaman suara asli di `sounds/*.wav`.
 
 #### Scenario: Kit bawaan New Metro tersedia saat aplikasi pertama dibuka
 - **WHEN** aplikasi diinstal dan dibuka pertama kali
-- **THEN** kit New Metro tersedia di daftar kit berdasarkan file `assets/kits/new-metro/kit.json` dengan seluruh zona memiliki `"sound": null`
+- **THEN** kit New Metro tersedia di daftar kit berdasarkan file `assets/kits/new-metro/kit.json` dengan seluruh sampel suara di `sounds/` termuat
 
 #### Scenario: Zona kit bawaan berstatus unassigned saat pertama dibuka
 - **WHEN** developer atau pemain pertama kali membuka kit New Metro sebelum memasangkan suara

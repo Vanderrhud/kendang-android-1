@@ -28,7 +28,7 @@ Belum ada aplikasi kendang dangdut Android yang membagi satu kulit kendang menja
 **Data kit**
 - Format `kit.json` modular dan data-driven (skema pada bagian "Skema `kit.json` dan paket `.vrkendang`" di design.md): kanvas relatif, posisi dan ukuran tiap kendang (`Bass`, `Kecil 1`, `Sedang`, `Kecil 2`), parameter busur pembatas Bass, nama file suara (boleh null bila belum dipasang, seperti kit baru yang awalnya kosong), dan `gain` (volume) per zona (rentang 0.0–2.0).
 - Validasi ketat di `:kit-core`: bila `sound` tidak null, file harus ada, bukan path absolut, tidak mengandung `..`, dan berformat WAV PCM 16-bit mono valid.
-- Kit awal bawaan (`new-metro`) membawa konfigurasi tata letak dan zona di `assets/kits/new-metro/kit.json` tanpa menyertakan aset WAV bawaan di dalam APK.
+- Kit bawaan (`new-metro`) membawa konfigurasi tata letak dan rekaman suara kendang asli di `assets/kits/new-metro/`.
 - Format paket kit satu file berekstensi **`.vrkendang`** (zip berisi `kit.json` dan `sounds/*.wav`) untuk ekspor/impor oleh developer.
 
 **Mode pemain: sesuaikan tata letak (Mode Kalibrasi)**

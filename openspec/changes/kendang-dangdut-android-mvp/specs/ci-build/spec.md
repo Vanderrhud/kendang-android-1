@@ -47,9 +47,9 @@ Build SHALL tidak menjalankan task pembuat nada atau task Gradle apa pun yang me
 - **WHEN** workflow membangun APK debug
 - **THEN** tidak ada task Gradle yang membuat file `.wav`, dan setiap file WAV di dalam APK hanya berasal dari file yang sudah di-commit di `assets/kits/`
 
-#### Scenario: Kit bawaan MVP New Metro hanya berisi kit.json dengan semua sound null
-- **WHEN** APK debug MVP dibangun
-- **THEN** `assets/kits/new-metro/` hanya berisi `kit.json` dengan seluruh zona berstatus `"sound": null`
+#### Scenario: Kit bawaan New Metro berisi kit.json dan sampel suara rekaman asli di sounds/
+- **WHEN** APK debug dibangun
+- **THEN** `assets/kits/new-metro/` berisi `kit.json` dan seluruh file WAV yang dirujuk di folder `sounds/`
 
 ### Requirement: Unit test `:kit-core` berjalan di CI sebelum build APK
 Workflow SHALL menjalankan seluruh unit test modul `:kit-core` sebelum proses `assembleDebug`. Jika ada test yang gagal, build dihentikan dan workflow ditandai gagal. Lokasi `assets/kits` SHALL diberikan ke tes lewat konfigurasi Gradle (misalnya `systemProperty`), bukan path relatif yang rapuh. Tes kit bawaan SHALL GAGAL bila tidak menemukan minimal satu kit.

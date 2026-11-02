@@ -64,8 +64,7 @@ class KitAudioLoaderTest {
     // -------------------------------------------------------------------------
 
     /**
-     * Membaca kit New Metro asli dari aset aplikasi agar test memakai data MVP
-     * yang sebenarnya (4 drum, 10 zona, seluruh sound null).
+     * Membaca kit New Metro asli dari aset aplikasi.
      */
     private fun loadNewMetroKit(): KitData {
         val candidates = listOf(
@@ -75,6 +74,22 @@ class KitAudioLoaderTest {
         val file = candidates.firstOrNull { it.isFile }
             ?: error("kit.json New Metro tidak ditemukan dari direktori kerja test")
         return KitJsonParser.parse(file.readText())
+    }
+
+    /**
+     * Membuat kit tiruan tanpa suara (seluruh sound null) untuk menguji perilaku kit hening.
+     */
+    private fun createSilentKit(): KitData {
+        val base = loadNewMetroKit()
+        return base.copy(
+            drums = base.drums.map { drum ->
+                drum.copy(
+                    zones = drum.zones.map { zone ->
+                        zone.copy(sound = null)
+                    }
+                )
+            }
+        )
     }
 
     /** Membangun WAV PCM 16-bit mono minimal yang valid untuk [WavParser]. */
@@ -120,7 +135,7 @@ class KitAudioLoaderTest {
         val engine = FakeAudioEngine()
         val logs = mutableListOf<String>()
         val loader = KitAudioLoader(logSink = { message -> logs.add(message) })
-        val kit = loadNewMetroKit()
+        val kit = createSilentKit()
 
         val activation = loader.activate(
             kit = kit,
@@ -151,12 +166,46 @@ class KitAudioLoaderTest {
             engine = FakeAudioEngine()
         )
 
-        assertEquals(10, activation.slotByZoneId.size)
-        assertEquals(0, activation.slotByZoneId["bass-1"])
-        assertEquals(4, activation.slotByZoneId["bass-5"])
-        assertEquals(5, activation.slotByZoneId["kecil1-1"])
-        assertEquals(6, activation.slotByZoneId["sedang-1"])
-        assertEquals(9, activation.slotByZoneId["kecil2-2"])
+        assertEquals(9, activation.slotByZoneId.size)
+        assertEquals(0, activation.slotByZoneId["kecil2-1"])
+        assertEquals(1, activation.slotByZoneId["kecil2-2"])
+        assertEquals(2, activation.slotByZoneId["sedang-1"])
+        assertEquals(3, activation.slotByZoneId["sedang-2"])
+        assertEquals(4, activation.slotByZoneId["kecil1-1"])
+        assertEquals(5, activation.slotByZoneId["bass-1"])
+        assertEquals(6, activation.slotByZoneId["bass-2"])
+        assertEquals(7, activation.slotByZoneId["bass-3"])
+        assertEquals(8, activation.slotByZoneId["bass-4"])
+    }
+
+    @Test
+    fun `kit New Metro bawaan dengan suara memuat seluruh 9 WAV dari aset`() {
+        val kit = loadNewMetroKit()
+        val engine = FakeAudioEngine()
+        val loader = KitAudioLoader(logSink = {})
+
+        val assetsDir = listOf(
+            File("src/main/assets/kits/new-metro"),
+            File("app/src/main/assets/kits/new-metro")
+        ).firstOrNull { it.isDirectory }
+            ?: error("Aset new-metro tidak ditemukan")
+
+        val soundSource = KitSoundSource { path ->
+            val soundFile = File(assetsDir, path)
+            if (soundFile.exists()) soundFile.inputStream() else error("File not found: $path")
+        }
+
+        val activation = loader.activate(
+            kit = kit,
+            soundSource = soundSource,
+            engine = engine
+        )
+
+        assertEquals(9, activation.loadedSoundCount)
+        assertEquals(0, activation.failedSoundCount)
+        assertEquals((0..8).toList(), engine.loadedSlots)
+        assertTrue(activation.streamOpened)
+        assertTrue(activation.streamStarted)
     }
 
     // -------------------------------------------------------------------------
@@ -186,7 +235,7 @@ class KitAudioLoaderTest {
 
         assertEquals(2, activation.loadedSoundCount)
         assertEquals(0, activation.failedSoundCount)
-        assertEquals(listOf(0, 5), engine.loadedSlots)
+        assertEquals(listOf(4, 5), engine.loadedSlots)
         assertEquals(1, engine.releaseAllCount, "releaseAll harus dipanggil sebelum load")
         assertTrue(activation.streamOpened)
         assertTrue(activation.streamStarted)
@@ -242,7 +291,7 @@ class KitAudioLoaderTest {
         val loader = KitAudioLoader(logSink = { message -> logs.add(message) })
 
         val activation = loader.activate(
-            kit = loadNewMetroKit(),
+            kit = createSilentKit(),
             soundSource = KitSoundSource { error("tidak ada WAV") },
             engine = engine
         )
@@ -258,7 +307,7 @@ class KitAudioLoaderTest {
     // -------------------------------------------------------------------------
 
     private fun kitWithSoundAssignments(assignments: Map<String, String>): KitData {
-        val base = loadNewMetroKit()
+        val base = createSilentKit()
         return base.copy(
             drums = base.drums.map { drum ->
                 drum.copy(
