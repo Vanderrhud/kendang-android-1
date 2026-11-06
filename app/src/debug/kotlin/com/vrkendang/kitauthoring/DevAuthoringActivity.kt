@@ -4,6 +4,7 @@ import android.app.Activity
 import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -27,6 +28,8 @@ import android.widget.Toast
 import com.vrkendang.KitSelectActivity
 import com.vrkendang.audio.AudioEngine
 import com.vrkendang.audio.KitAudioLoader
+import com.vrkendang.image.KitImageLoader
+import com.vrkendang.image.KitImageSource
 import com.vrkendang.kitcore.model.KitData
 import com.vrkendang.repository.KitRepository
 import com.vrkendang.view.KendangBoardView
@@ -50,12 +53,15 @@ class DevAuthoringActivity : Activity() {
         private const val REQ_PICK_WAV = 2001
         private const val REQ_IMPORT_PACKAGE = 2002
         private const val REQ_EXPORT_PACKAGE = 2003
+        private const val REQ_PICK_PNG = 2004
     }
 
     private lateinit var session: DevKitAuthoringSession
     private lateinit var internalKitsDir: File
     private val kitAudioLoader = KitAudioLoader()
+    private val kitImageLoader = KitImageLoader()
     private val activeSlotMap = mutableMapOf<String, Int>()
+    private var currentDrumBitmaps = mutableMapOf<String, Bitmap>()
 
     private var isTestPlayMode: Boolean = false
     private var selectedDrumId: String = "bass"
@@ -119,7 +125,25 @@ class DevAuthoringActivity : Activity() {
         }
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        kitImageLoader.releaseBitmaps(currentDrumBitmaps)
+        currentDrumBitmaps.clear()
+    }
+
+    private fun reloadDrumImages() {
+        kitImageLoader.releaseBitmaps(currentDrumBitmaps)
+        currentDrumBitmaps.clear()
+        val kit = session.workingKit ?: return
+        val imageSource = KitImageSource { relPath ->
+            File(session.devKitDir, relPath).inputStream()
+        }
+        val loaded = kitImageLoader.loadImages(kit, imageSource)
+        currentDrumBitmaps.putAll(loaded)
+    }
+
     private fun activateKitAudio(kit: KitData) {
+        reloadDrumImages()
         activeSlotMap.clear()
         var slotIdx = 0
         for (drum in kit.drums) {
@@ -330,6 +354,7 @@ class DevAuthoringActivity : Activity() {
             fullScreenEdgeToEdge = false
             fitInsidePanel = true
             this.kit = kit
+            this.drumBitmaps = currentDrumBitmaps
             this.slotByZoneId = activeSlotMap
             this.selectedDrumId = this@DevAuthoringActivity.selectedDrumId
             this.selectedZoneId = this@DevAuthoringActivity.selectedZoneId
@@ -644,6 +669,53 @@ class DevAuthoringActivity : Activity() {
             headerRow.addView(deleteDrumBtn)
         }
         rightContainer.addView(headerRow)
+
+        // Bagian Gambar Kendang (PNG)
+        val imageBox = createCompactBox()
+        val imageHeader = TextView(this).apply {
+            text = "VISUAL KENDANG (PNG):"
+            textSize = 9.5f
+            setTextColor(Color.parseColor("#A89F96"))
+            paint.isFakeBoldText = true
+            setPadding(0, 0, 0, (2 * density).toInt())
+        }
+        imageBox.addView(imageHeader)
+
+        val imageStatus = TextView(this).apply {
+            val hasImage = drum.image != null
+            text = if (hasImage) "✓ ${drum.image}" else "Render bawaan Canvas"
+            textSize = 10.5f
+            setTextColor(Color.parseColor(if (hasImage) "#81C784" else "#FFB74D"))
+            paint.isFakeBoldText = true
+            setPadding(0, 0, 0, (4 * density).toInt())
+        }
+        imageBox.addView(imageStatus)
+
+        val imageBtnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+
+        val pickPngBtn = createCompactActionButton("Pilih PNG", "#1E88E5", "#42A5F5", 1.2f) {
+            launchPngPickerForSelectedDrum()
+        }
+        imageBtnRow.addView(pickPngBtn)
+
+        if (drum.image != null) {
+            val clearPngBtn = createCompactActionButton("Kosongkan", "#2B2520", "#FF8A80", 1.0f) {
+                val res = session.clearDrumImage(drum.id)
+                if (res is DevImageInstaller.Result.Success) {
+                    reloadDrumImages()
+                    previewBoard.drumBitmaps = currentDrumBitmaps
+                    refreshHeaderStatus()
+                    renderCurrentModeContent()
+                    Toast.makeText(this@DevAuthoringActivity, "✓ Gambar dikosongkan", Toast.LENGTH_SHORT).show()
+                }
+            }
+            imageBtnRow.addView(clearPngBtn)
+        }
+        imageBox.addView(imageBtnRow)
+        rightContainer.addView(imageBox)
 
         // Pemilih Jumlah Zona (Bass: 1..5, Non-Bass: 1..4)
         val maxZones = if (drum.model == "bass") 5 else 4
@@ -1229,6 +1301,7 @@ class DevAuthoringActivity : Activity() {
             fullScreenEdgeToEdge = true
             fitInsidePanel = false
             this.kit = kit
+            this.drumBitmaps = currentDrumBitmaps
             this.slotByZoneId = activeSlotMap
         }
     }
@@ -1344,6 +1417,14 @@ class DevAuthoringActivity : Activity() {
         startActivityForResult(intent, REQ_PICK_WAV)
     }
 
+    private fun launchPngPickerForSelectedDrum() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/png"
+        }
+        startActivityForResult(intent, REQ_PICK_PNG)
+    }
+
     private fun promptImportPackage() {
         if (session.hasUnsavedChanges) {
             AlertDialog.Builder(this)
@@ -1454,6 +1535,30 @@ class DevAuthoringActivity : Activity() {
                         .setMessage("Terjadi kesalahan saat mengekspor: ${e.message}")
                         .setPositiveButton("OK", null)
                         .show()
+                }
+            }
+
+            REQ_PICK_PNG -> {
+                val inputStream = runCatching { contentResolver.openInputStream(uri) }.getOrNull() ?: return
+                val res = session.installDrumImage(selectedDrumId, inputStream)
+                when (res) {
+                    is DevImageInstaller.Result.Success -> {
+                        reloadDrumImages()
+                        refreshHeaderStatus()
+                        renderCurrentModeContent()
+                        Toast.makeText(
+                            this,
+                            "✓ Gambar PNG dipasang ke $selectedDrumId (${res.width}x${res.height})",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    is DevImageInstaller.Result.Failure -> {
+                        AlertDialog.Builder(this)
+                            .setTitle("File PNG Ditolak")
+                            .setMessage(res.message)
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
                 }
             }
         }

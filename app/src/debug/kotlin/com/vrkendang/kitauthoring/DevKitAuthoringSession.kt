@@ -56,10 +56,14 @@ class DevKitAuthoringSession(
     var mode: BoardMode = BoardMode.UJI
 
     val soundsDir: File get() = File(devKitDir, "sounds")
+    val imagesDir: File get() = File(devKitDir, "images")
+
+    private val devImageInstaller = DevImageInstaller()
 
     init {
         if (!devKitDir.exists()) devKitDir.mkdirs()
         if (!soundsDir.exists()) soundsDir.mkdirs()
+        if (!imagesDir.exists()) imagesDir.mkdirs()
     }
 
     /**
@@ -100,6 +104,18 @@ class DevKitAuthoringSession(
                 savedSoundsDir.listFiles()?.forEach { wavFile ->
                     if (wavFile.isFile) {
                         wavFile.copyTo(File(soundsDir, wavFile.name), overwrite = true)
+                    }
+                }
+            }
+
+            imagesDir.deleteRecursively()
+            imagesDir.mkdirs()
+
+            val savedImagesDir = File(savedDir, "images")
+            if (savedImagesDir.isDirectory) {
+                savedImagesDir.listFiles()?.forEach { imgFile ->
+                    if (imgFile.isFile) {
+                        imgFile.copyTo(File(imagesDir, imgFile.name), overwrite = true)
                     }
                 }
             }
@@ -154,6 +170,20 @@ class DevKitAuthoringSession(
             try {
                 assetManager.open("kits/$kitId/sounds/$fileName").use { input ->
                     File(soundsDir, fileName).writeBytes(input.readBytes())
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Bersihkan images lama
+        imagesDir.deleteRecursively()
+        imagesDir.mkdirs()
+
+        // Salin jika ada PNG bawaan
+        val imageList = assetManager.list("kits/$kitId/images") ?: emptyArray()
+        for (fileName in imageList) {
+            try {
+                assetManager.open("kits/$kitId/images/$fileName").use { input ->
+                    File(imagesDir, fileName).writeBytes(input.readBytes())
                 }
             } catch (_: Exception) {}
         }
@@ -244,6 +274,31 @@ class DevKitAuthoringSession(
             }
         }
 
+        val targetImagesDir = File(targetDir, "images")
+        if (!targetImagesDir.exists()) targetImagesDir.mkdirs()
+
+        // Bersihkan PNG yatim di folder tujuan yang tidak lagi dirujuk oleh kit.json
+        val referencedImageFileNames = kit.drums
+            .mapNotNull { it.image?.substringAfterLast('/') }
+            .toSet()
+
+        targetImagesDir.listFiles()?.forEach { existing ->
+            if (existing.name !in referencedImageFileNames) {
+                existing.delete()
+            }
+        }
+
+        // Salin PNG yang dirujuk dari devKitDir ke filesDir/kits/<kitId>/images/
+        for (drum in kit.drums) {
+            val relPath = drum.image ?: continue
+            val srcFile = File(devKitDir, relPath)
+            val dstFile = File(targetDir, relPath)
+            if (srcFile.isFile) {
+                dstFile.parentFile?.mkdirs()
+                srcFile.copyTo(dstFile, overwrite = true)
+            }
+        }
+
         // Tulis kit.json secara atomik ke filesDir/kits/<kitId>/kit.json
         val targetJson = File(targetDir, "kit.json")
         val tmpJson = File(targetDir, "kit.json.tmp")
@@ -276,6 +331,15 @@ class DevKitAuthoringSession(
 
             for ((soundPath, bytes) in extracted.wavFiles) {
                 val targetFile = File(devKitDir, soundPath)
+                targetFile.parentFile?.mkdirs()
+                targetFile.writeBytes(bytes)
+            }
+
+            imagesDir.deleteRecursively()
+            imagesDir.mkdirs()
+
+            for ((imagePath, bytes) in extracted.imageFiles) {
+                val targetFile = File(devKitDir, imagePath)
                 targetFile.parentFile?.mkdirs()
                 targetFile.writeBytes(bytes)
             }
@@ -704,6 +768,12 @@ class DevKitAuthoringSession(
             }
         }
 
+        // Hapus file PNG gambar kendang jika ada di folder images/
+        val imageFile = File(imagesDir, "$drumId.png")
+        if (imageFile.exists()) {
+            imageFile.delete()
+        }
+
         val updatedDrums = kit.drums.filter { it.id != drumId }
         val updated = kit.copy(drums = updatedDrums)
         writeKitJsonToDisk(updated)
@@ -762,11 +832,70 @@ class DevKitAuthoringSession(
     }
 
     /**
+     * Memasang gambar PNG untuk kendang.
+     */
+    fun installDrumImage(drumId: String, inputStream: InputStream): DevImageInstaller.Result {
+        val result = devImageInstaller.installPng(drumId, inputStream, devKitDir)
+        if (result is DevImageInstaller.Result.Success) {
+            workingKit = result.updatedKit
+            hasUnsavedChanges = true
+        }
+        return result
+    }
+
+    /**
+     * Mengosongkan gambar PNG kendang (kembali ke render bawaan Canvas).
+     */
+    fun clearDrumImage(drumId: String): DevImageInstaller.Result {
+        val result = devImageInstaller.clearImage(drumId, devKitDir)
+        if (result is DevImageInstaller.Result.Success) {
+            workingKit = result.updatedKit
+            hasUnsavedChanges = true
+        }
+        return result
+    }
+
+    /**
+     * Mengubah ID kendang dan me-rename file gambar PNG jika ada.
+     */
+    fun renameDrumId(oldDrumId: String, newDrumId: String): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        if (oldDrumId == newDrumId) return kit
+        if (oldDrumId == "bass" || newDrumId == "bass") {
+            throw IllegalArgumentException("ID kendang Bass tidak boleh diubah")
+        }
+        val target = kit.drums.firstOrNull { it.id == oldDrumId }
+            ?: throw IllegalArgumentException("Kendang '$oldDrumId' tidak ditemukan")
+        if (kit.drums.any { it.id == newDrumId }) {
+            throw IllegalArgumentException("ID '$newDrumId' sudah digunakan kendang lain")
+        }
+
+        // Pindahkan file gambar jika ada
+        val oldImageFile = File(imagesDir, "$oldDrumId.png")
+        val newImagePath = if (target.image != null) "images/$newDrumId.png" else null
+        if (oldImageFile.exists()) {
+            val newImageFile = File(imagesDir, "$newDrumId.png")
+            oldImageFile.renameTo(newImageFile)
+        }
+
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.id == oldDrumId) {
+                drum.copy(id = newDrumId, image = newImagePath)
+            } else drum
+        }
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
      * Mengekspor kit ke paket .vrkendang (Task 11.6).
      *
      * Alur:
      * 1. Naikkan nilai version tepat 1 tingkat.
-     * 2. Susun paket di memory/cache via KitPackageWriter (hanya WAV yang dirujuk, tanpa file yatim).
+     * 2. Susun paket di memory/cache via KitPackageWriter (hanya WAV dan PNG yang dirujuk, tanpa file yatim).
      * 3. Baca ulang dan validasi via KitPackageReader & KitValidator.
      * 4. Salin ke target OutputStream.
      * 5. Set hasUnsavedChanges = false.
@@ -788,7 +917,11 @@ class DevKitAuthoringSession(
             val wavFile = File(devKitDir, soundPath)
             if (wavFile.exists()) wavFile.readBytes() else null
         }
-        KitPackageWriter.writePackage(incrementedKit, wavProvider, packageBytesOut)
+        val imageProvider = { imagePath: String ->
+            val imageFile = File(devKitDir, imagePath)
+            if (imageFile.exists()) imageFile.readBytes() else null
+        }
+        KitPackageWriter.writePackage(incrementedKit, wavProvider, packageBytesOut, imageProvider)
 
         val packageBytes = packageBytesOut.toByteArray()
 

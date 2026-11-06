@@ -158,4 +158,36 @@ class KitPackageReaderTest {
         }
         assertTrue(ex.message!!.contains("total ukuran dekompresi melebihi batas") || ex.message!!.contains("melebihi batas"))
     }
+
+    @Test
+    fun testOversizedPngRejected() {
+        val kitJson = createValidKitJson().toByteArray(Charsets.UTF_8)
+        val largePng = ByteArray(3 * 1024 * 1024) // 3 MB (> 2 MB)
+
+        val zipBytes = createZip(mapOf(
+            "kit.json" to kitJson,
+            "images/kecil1.png" to largePng
+        ))
+
+        val ex = assertFailsWith<SecurityException> {
+            KitPackageReader.read(ByteArrayInputStream(zipBytes))
+        }
+        assertTrue(ex.message!!.contains("file PNG") && ex.message!!.contains("melebihi batas maksimum"))
+    }
+
+    @Test
+    fun testImagesPathTraversalRejected() {
+        val kitJson = createValidKitJson().toByteArray(Charsets.UTF_8)
+        val dummyPng = ByteArray(100) { 0 }
+
+        val zipBytes = createZip(mapOf(
+            "kit.json" to kitJson,
+            "images/../escape.png" to dummyPng
+        ))
+
+        val ex = assertFailsWith<SecurityException> {
+            KitPackageReader.read(ByteArrayInputStream(zipBytes))
+        }
+        assertTrue(ex.message!!.contains("path traversal"))
+    }
 }

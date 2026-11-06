@@ -19,6 +19,7 @@ class DevPickerFragment : Fragment() {
 
     companion object {
         const val REQUEST_PICK_WAV = 9001
+        const val REQUEST_PICK_PNG = 9002
     }
 
     /** Dipanggil setelah picker selesai: URI file terpilih, atau null jika dibatalkan. */
@@ -26,7 +27,7 @@ class DevPickerFragment : Fragment() {
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQUEST_PICK_WAV) {
+        if (requestCode == REQUEST_PICK_WAV || requestCode == REQUEST_PICK_PNG) {
             val uri: Uri? = if (resultCode == android.app.Activity.RESULT_OK) data?.data else null
             onFilePicked?.invoke(uri)
             onFilePicked = null

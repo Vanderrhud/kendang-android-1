@@ -10,18 +10,19 @@ import java.util.zip.ZipOutputStream
 
 /**
  * Penyusun paket .vrkendang (ZIP).
- * Mengemas kit.json dan hanya file WAV yang dirujuk oleh zona kit (tanpa file WAV yatim).
+ * Mengemas kit.json dan hanya file WAV serta file PNG yang dirujuk oleh kit (tanpa file yatim).
  */
 object KitPackageWriter {
 
     /**
      * Menyusun paket .vrkendang ke OutputStream.
-     * Hanya file WAV yang dirujuk oleh zona kit.json yang disertakan.
+     * Hanya file WAV dan PNG yang dirujuk oleh kit.json yang disertakan.
      */
     fun writePackage(
         kit: KitData,
         wavProvider: (soundPath: String) -> ByteArray?,
-        outputStream: OutputStream
+        outputStream: OutputStream,
+        imageProvider: (imagePath: String) -> ByteArray? = { null }
     ) {
         KitValidator.validateOrThrow(kit)
 
@@ -54,6 +55,25 @@ object KitPackageWriter {
                 zos.write(wavBytes)
                 zos.closeEntry()
             }
+
+            // 4. Kumpulkan path PNG gambar kendang yang dirujuk secara unik
+            val referencedImagePaths = mutableSetOf<String>()
+            for (drum in kit.drums) {
+                if (drum.image != null) {
+                    referencedImagePaths.add(drum.image)
+                }
+            }
+
+            // 5. Tulis file PNG yang dirujuk saja (tanpa PNG yatim)
+            for (path in referencedImagePaths) {
+                val imageBytes = imageProvider(path)
+                    ?: throw IllegalArgumentException("File gambar yang dirujuk tidak ditemukan: '$path'")
+                val entryName = if (path.startsWith("/")) path.substring(1) else path
+                val imageEntry = ZipEntry(entryName)
+                zos.putNextEntry(imageEntry)
+                zos.write(imageBytes)
+                zos.closeEntry()
+            }
         }
     }
 
@@ -62,10 +82,11 @@ object KitPackageWriter {
      */
     fun toByteArray(
         kit: KitData,
-        wavProvider: (soundPath: String) -> ByteArray?
+        wavProvider: (soundPath: String) -> ByteArray?,
+        imageProvider: (imagePath: String) -> ByteArray? = { null }
     ): ByteArray {
         val baos = ByteArrayOutputStream()
-        writePackage(kit, wavProvider, baos)
+        writePackage(kit, wavProvider, baos, imageProvider)
         return baos.toByteArray()
     }
 }

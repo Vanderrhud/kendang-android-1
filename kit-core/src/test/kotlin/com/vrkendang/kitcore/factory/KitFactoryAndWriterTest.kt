@@ -103,4 +103,55 @@ class KitFactoryAndWriterTest {
         val extractedCleared = KitPackageReader.read(ByteArrayInputStream(clearedZip))
         assertTrue(extractedCleared.wavFiles.isEmpty())
     }
+
+    private fun createMinimalPng(): ByteArray {
+        val baos = ByteArrayOutputStream()
+        baos.write(byteArrayOf(
+            0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte(),
+            0x0D.toByte(), 0x0A.toByte(), 0x1A.toByte(), 0x0A.toByte()
+        ))
+        val dos = java.io.DataOutputStream(baos)
+        dos.writeInt(13)
+        dos.write("IHDR".toByteArray(Charsets.US_ASCII))
+        dos.writeInt(100)
+        dos.writeInt(100)
+        dos.writeByte(8)
+        dos.writeByte(6)
+        dos.writeByte(0)
+        dos.writeByte(0)
+        dos.writeByte(0)
+        dos.writeInt(0)
+        dos.flush()
+        return baos.toByteArray()
+    }
+
+    @Test
+    fun testPackageWriterIncludesReferencedPngAndExcludesOrphanPng() {
+        val kit = KitFactory.createFromTemplate("png-kit", "PNG Kit")
+        val kitWithPng = kit.copy(
+            drums = kit.drums.map { drum ->
+                if (drum.id == "kecil1") drum.copy(image = "images/kecil1.png") else drum
+            }
+        )
+
+        val pngBytes = createMinimalPng()
+        val orphanPngBytes = createMinimalPng()
+
+        val imageMap = mapOf(
+            "images/kecil1.png" to pngBytes,
+            "images/orphan.png" to orphanPngBytes
+        )
+
+        val zipBytes = KitPackageWriter.toByteArray(
+            kit = kitWithPng,
+            wavProvider = { null },
+            imageProvider = { path -> imageMap[path] }
+        )
+
+        val extracted = KitPackageReader.read(ByteArrayInputStream(zipBytes))
+        assertEquals(kitWithPng.kitId, extracted.kitData.kitId)
+        assertTrue(extracted.imageFiles.containsKey("images/kecil1.png"))
+        assertFalse(extracted.imageFiles.containsKey("images/orphan.png"), "PNG yatim tidak boleh ikut dikemas")
+        assertEquals(pngBytes.size, extracted.imageFiles["images/kecil1.png"]!!.size)
+    }
 }

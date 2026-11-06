@@ -1,10 +1,10 @@
 package com.vrkendang.kitcore.packageio
 
+import com.vrkendang.kitcore.image.PngValidator
 import com.vrkendang.kitcore.model.KitData
 import com.vrkendang.kitcore.parser.KitJsonParser
 import com.vrkendang.kitcore.validation.KitValidator
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.util.zip.ZipEntry
@@ -15,6 +15,7 @@ import java.util.zip.ZipInputStream
  * - Maksimum 100 entri
  * - Total dekompresi maks 100 MB
  * - Maksimum ukuran per file WAV 5 MB
+ * - Maksimum ukuran per file PNG 2 MB
  * - Penolakan path traversal (.. atau path absolut) sebelum ekstraksi ke disk
  */
 object KitPackageReader {
@@ -22,10 +23,12 @@ object KitPackageReader {
     const val MAX_ENTRIES = 100
     const val MAX_TOTAL_SIZE = 100 * 1024 * 1024L // 100 MB
     const val MAX_WAV_SIZE = 5 * 1024 * 1024L     // 5 MB
+    const val MAX_PNG_SIZE = 2 * 1024 * 1024L     // 2 MB
 
     data class ExtractedKit(
         val kitData: KitData,
-        val wavFiles: Map<String, ByteArray>
+        val wavFiles: Map<String, ByteArray>,
+        val imageFiles: Map<String, ByteArray> = emptyMap()
     )
 
     /**
@@ -37,6 +40,7 @@ object KitPackageReader {
 
         var kitJsonContent: String? = null
         val wavMap = mutableMapOf<String, ByteArray>()
+        val imageMap = mutableMapOf<String, ByteArray>()
 
         ZipInputStream(ByteArrayInputStream(bytes)).use { zis ->
             var entry: ZipEntry? = zis.nextEntry
@@ -48,6 +52,8 @@ object KitPackageReader {
                         kitJsonContent = entryBytes.decodeToString()
                     } else if (normalizedName.startsWith("sounds/") && normalizedName.endsWith(".wav")) {
                         wavMap[normalizedName] = entryBytes
+                    } else if (normalizedName.startsWith("images/") && normalizedName.endsWith(".png")) {
+                        imageMap[normalizedName] = entryBytes
                     }
                 }
                 zis.closeEntry()
@@ -61,7 +67,20 @@ object KitPackageReader {
         val kitData = KitJsonParser.parse(jsonString)
         KitValidator.validateOrThrow(kitData)
 
-        return ExtractedKit(kitData, wavMap)
+        // Validasi keberadaan dan format file PNG yang dirujuk kit.json
+        for (drum in kitData.drums) {
+            if (drum.image != null) {
+                val imgBytes = imageMap[drum.image]
+                    ?: throw IllegalArgumentException("File gambar yang dirujuk tidak ditemukan di paket: '${drum.image}'")
+                try {
+                    PngValidator.validate(imgBytes)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("File gambar '${drum.image}' bukan format PNG valid: ${e.message}", e)
+                }
+            }
+        }
+
+        return ExtractedKit(kitData, wavMap, imageMap)
     }
 
     /**
@@ -87,6 +106,18 @@ object KitPackageReader {
         }
 
         for ((relPath, data) in extracted.wavFiles) {
+            val destFile = File(targetDir, relPath)
+            destFile.parentFile?.mkdirs()
+            destFile.writeBytes(data)
+        }
+
+        // Tulis file PNG gambar kendang
+        val imagesDir = File(targetDir, "images")
+        if (extracted.imageFiles.isNotEmpty() && !imagesDir.exists()) {
+            imagesDir.mkdirs()
+        }
+
+        for ((relPath, data) in extracted.imageFiles) {
             val destFile = File(targetDir, relPath)
             destFile.parentFile?.mkdirs()
             destFile.writeBytes(data)
@@ -131,6 +162,9 @@ object KitPackageReader {
                         val normalizedName = name.replace('\\', '/')
                         if (normalizedName.endsWith(".wav") && entryBytesRead > MAX_WAV_SIZE) {
                             throw SecurityException("Paket ditolak: file WAV '$name' melebihi batas maksimum ($MAX_WAV_SIZE byte / 5 MB)")
+                        }
+                        if (normalizedName.endsWith(".png") && entryBytesRead > MAX_PNG_SIZE) {
+                            throw SecurityException("Paket ditolak: file PNG '$name' melebihi batas maksimum ($MAX_PNG_SIZE byte / 2 MB)")
                         }
                     }
                 }

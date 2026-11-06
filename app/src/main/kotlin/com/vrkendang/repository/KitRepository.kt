@@ -259,6 +259,20 @@ class KitRepository(
     }
 
     /**
+     * Membuka stream file gambar milik [kitId] pada [relativePath] (misal `images/bass.png`).
+     * Mengutamakan file di `internalKitsDir` bila ada, lalu jatuh ke `assets/kits/`.
+     */
+    fun openImageStream(kitId: String, relativePath: String): InputStream {
+        if (internalKitsDir != null) {
+            val internalImage = File(File(internalKitsDir, kitId), relativePath)
+            if (internalImage.isFile) {
+                return internalImage.inputStream()
+            }
+        }
+        return assetSource.open("$KITS_ASSET_ROOT/$kitId/$relativePath")
+    }
+
+    /**
      * Memilih kit berdasarkan [kitId].
      *
      * Bila kit tidak valid/tidak ditemukan, pertahankan kit yang sebelumnya

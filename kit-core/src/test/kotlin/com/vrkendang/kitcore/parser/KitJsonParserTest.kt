@@ -135,4 +135,61 @@ class KitJsonParserTest {
             KitJsonParser.parse(missingDrumsJson)
         }
     }
+
+    @Test
+    fun testParseOldKitWithoutImageHasNullImageAndOutputsExplicitNull() {
+        val oldKitJson = """
+            {
+              "formatVersion": 1,
+              "kitId": "old-kit",
+              "name": "Old Kit",
+              "drums": [
+                {
+                  "id": "bass",
+                  "model": "bass",
+                  "center": { "x": 0.25, "y": 0.55 },
+                  "radius": { "rx": 0.30, "ry": 0.30 },
+                  "zones": [
+                    { "id": "bass-1", "region": "main", "sound": null, "gain": 1.0 }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parsed = KitJsonParser.parse(oldKitJson)
+        assertNull(parsed.drums[0].image)
+
+        val stringified = KitJsonParser.stringify(parsed)
+        kotlin.test.assertTrue(stringified.contains("\"image\": null"), "Stringify harus menyertakan explicit null image")
+    }
+
+    @Test
+    fun testParseAndStringifyKitWithImage() {
+        val kitWithImageJson = """
+            {
+              "formatVersion": 1,
+              "kitId": "image-kit",
+              "name": "Image Kit",
+              "drums": [
+                {
+                  "id": "bass",
+                  "model": "bass",
+                  "center": { "x": 0.25, "y": 0.55 },
+                  "radius": { "rx": 0.30, "ry": 0.30 },
+                  "image": "images/bass.png",
+                  "zones": [
+                    { "id": "bass-1", "region": "main", "sound": null, "gain": 1.0 }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parsed = KitJsonParser.parse(kitWithImageJson)
+        assertEquals("images/bass.png", parsed.drums[0].image)
+
+        val stringified = KitJsonParser.stringify(parsed)
+        kotlin.test.assertTrue(stringified.contains("\"image\": \"images/bass.png\""))
+    }
 }

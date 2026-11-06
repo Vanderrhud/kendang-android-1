@@ -308,4 +308,110 @@ class DevKitAuthoringSessionTest {
             tempDir.deleteRecursively()
         }
     }
+
+    private fun buildMinimalPng(): ByteArray {
+        val baos = ByteArrayOutputStream()
+        baos.write(byteArrayOf(
+            0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte(),
+            0x0D.toByte(), 0x0A.toByte(), 0x1A.toByte(), 0x0A.toByte()
+        ))
+        val dos = java.io.DataOutputStream(baos)
+        dos.writeInt(13)
+        dos.write("IHDR".toByteArray(Charsets.US_ASCII))
+        dos.writeInt(128)
+        dos.writeInt(128)
+        dos.writeByte(8)
+        dos.writeByte(6)
+        dos.writeByte(0)
+        dos.writeByte(0)
+        dos.writeByte(0)
+        dos.writeInt(0)
+        dos.flush()
+        return baos.toByteArray()
+    }
+
+    @Test
+    fun testDeleteDrumRemovesPngImage() {
+        val tempDir = File.createTempFile("dev-session-del-img", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-del-img", "Test Delete Image", null)
+            val (_, newDrum) = session.addDrum("Kecil 3", 1)
+
+            val pngFile = File(session.imagesDir, "${newDrum.id}.png").apply { writeBytes(buildMinimalPng()) }
+            assertTrue(pngFile.exists())
+
+            session.deleteDrum(newDrum.id)
+            assertFalse(pngFile.exists(), "File PNG harus otomatis terhapus saat kendang dihapus")
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun testRenameDrumIdMovesPngFileAndUpdatesImage() {
+        val tempDir = File.createTempFile("dev-session-rename-img", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-rename-img", "Test Rename Image", null)
+            val (_, newDrum) = session.addDrum("Kecil 3", 1)
+            val oldId = newDrum.id
+
+            File(session.imagesDir, "$oldId.png").writeBytes(buildMinimalPng())
+
+            // Pasang image path di model
+            val kitWithImage = session.workingKit!!.copy(
+                drums = session.workingKit!!.drums.map {
+                    if (it.id == oldId) it.copy(image = "images/$oldId.png") else it
+                }
+            )
+            val targetFile = File(tempDir, "kit.json")
+            targetFile.writeText(com.vrkendang.kitcore.parser.KitJsonParser.stringify(kitWithImage))
+            session.loadExistingWorkingCopy()
+
+            val updated = session.renameDrumId(oldId, "ketipung-kanan")
+            assertFalse(File(session.imagesDir, "$oldId.png").exists(), "File lama harus dipindahkan")
+            assertTrue(File(session.imagesDir, "ketipung-kanan.png").exists(), "File baru harus ada dengan nama ID baru")
+
+            val renamedDrum = updated.drums.first { it.id == "ketipung-kanan" }
+            assertEquals("images/ketipung-kanan.png", renamedDrum.image)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun testInternalSaveAndReloadPreservesImages() {
+        val tempDir = File.createTempFile("dev-session-save-img", "").apply { delete(); mkdirs() }
+        val internalDir = File.createTempFile("dev-session-internal-img", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            val kit = session.createNewKit("test-save-img", "Test Save Image", null)
+
+            File(session.imagesDir, "bass.png").writeBytes(buildMinimalPng())
+            val kitWithImage = kit.copy(
+                drums = kit.drums.map {
+                    if (it.id == "bass") it.copy(image = "images/bass.png") else it
+                }
+            )
+            File(tempDir, "kit.json").writeText(com.vrkendang.kitcore.parser.KitJsonParser.stringify(kitWithImage))
+            session.loadExistingWorkingCopy()
+
+            session.saveCurrentEditToInternalStorage(internalDir)
+
+            val savedImageFile = File(internalDir, "test-save-img/images/bass.png")
+            assertTrue(savedImageFile.exists(), "Gambar harus ikut tersimpan di internal storage")
+
+            // Bersihkan devKitDir dan muat ulang dari internal
+            session.imagesDir.deleteRecursively()
+            val fakeAssetManager = org.robolectric.RuntimeEnvironment.getApplication().assets
+            val reloaded = session.openActiveKitAsWorkingCopy("test-save-img", internalDir, fakeAssetManager)
+
+            assertEquals("images/bass.png", reloaded.drums.first { it.id == "bass" }.image)
+            assertTrue(File(session.imagesDir, "bass.png").exists(), "Gambar harus dipulihkan ke salinan kerja")
+        } finally {
+            tempDir.deleteRecursively()
+            internalDir.deleteRecursively()
+        }
+    }
 }

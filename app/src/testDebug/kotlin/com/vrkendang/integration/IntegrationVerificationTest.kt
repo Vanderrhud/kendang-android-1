@@ -312,4 +312,61 @@ class IntegrationVerificationTest {
             tempDir.deleteRecursively()
         }
     }
+
+    private fun createMinimalPngBytes(): ByteArray {
+        val baos = ByteArrayOutputStream()
+        baos.write(byteArrayOf(
+            0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte(),
+            0x0D.toByte(), 0x0A.toByte(), 0x1A.toByte(), 0x0A.toByte()
+        ))
+        val dos = java.io.DataOutputStream(baos)
+        dos.writeInt(13)
+        dos.write("IHDR".toByteArray(Charsets.US_ASCII))
+        dos.writeInt(256)
+        dos.writeInt(256)
+        dos.writeByte(8)
+        dos.writeByte(6)
+        dos.writeByte(0)
+        dos.writeByte(0)
+        dos.writeByte(0)
+        dos.writeInt(0)
+        dos.flush()
+        return baos.toByteArray()
+    }
+
+    @Test
+    fun testExportAndReimportPackageWithPngImages() {
+        val tempDir = File.createTempFile("dev-export-import-png-", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("kendang-png-kit", "Kendang PNG Kit", null)
+
+            // Pasang PNG ke Bass
+            val pngBytes = createMinimalPngBytes()
+            val installRes = session.installDrumImage("bass", ByteArrayInputStream(pngBytes))
+            assertTrue(installRes is com.vrkendang.kitauthoring.DevImageInstaller.Result.Success)
+
+            val kitBeforeSave = session.workingKit!!
+            val incrementedKit = kitBeforeSave.copy(version = kitBeforeSave.version + 1)
+
+            val packageBytesOut = ByteArrayOutputStream()
+            val wavProvider = { soundPath: String ->
+                val f = File(tempDir, soundPath)
+                if (f.exists()) f.readBytes() else null
+            }
+            val imageProvider = { imagePath: String ->
+                val f = File(tempDir, imagePath)
+                if (f.exists()) f.readBytes() else null
+            }
+            KitPackageWriter.writePackage(incrementedKit, wavProvider, packageBytesOut, imageProvider)
+
+            val reimported = KitPackageReader.read(ByteArrayInputStream(packageBytesOut.toByteArray()))
+            KitValidator.validateOrThrow(reimported.kitData)
+            assertEquals(1, reimported.imageFiles.size)
+            assertTrue(reimported.imageFiles.containsKey("images/bass.png"))
+            assertEquals("images/bass.png", reimported.kitData.drums.first { it.id == "bass" }.image)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

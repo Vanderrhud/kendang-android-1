@@ -129,7 +129,22 @@ object KitValidator {
                 }
             }
 
-            // 4. Validasi Zona: Gain dan Sound path
+            // 4. Validasi Image drum
+            if (drum.image != null) {
+                val img = drum.image
+                if (img.startsWith("/") || img.startsWith("\\") || (img.length >= 2 && img[1] == ':')) {
+                    errors.add("Path image drum '${drum.id}' tidak boleh absolut: '$img'")
+                }
+                if (img.contains("..")) {
+                    errors.add("Path image drum '${drum.id}' tidak boleh mengandung '..': '$img'")
+                }
+                val expectedPath = "images/${drum.id}.png"
+                if (img != expectedPath) {
+                    errors.add("Path image drum '${drum.id}' harus persis '$expectedPath' (ditemukan: '$img')")
+                }
+            }
+
+            // 5. Validasi Zona: Gain dan Sound path
             for (zone in drum.zones) {
                 if (zone.gain !in 0.0f..2.0f) {
                     errors.add("Nilai gain zona '${zone.id}' harus di rentang 0.0..2.0 (ditemukan: ${zone.gain})")

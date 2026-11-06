@@ -69,6 +69,22 @@ class BuiltInKitsValidationTest {
                     }
                 }
             }
+
+            // 4. Validasi integritas file gambar PNG bila image tidak null
+            for (drum in kit.drums) {
+                if (drum.image != null) {
+                    val imageFile = File(kitDir, drum.image)
+                    assertTrue(
+                        imageFile.exists(),
+                        "File gambar '${drum.image}' untuk drum '${drum.id}' di kit '${kit.kitId}' tidak ditemukan di: ${imageFile.absolutePath}"
+                    )
+                    try {
+                        com.vrkendang.kitcore.image.PngValidator.validate(imageFile.readBytes())
+                    } catch (e: Exception) {
+                        fail("File PNG '${imageFile.absolutePath}' tidak valid: ${e.message}")
+                    }
+                }
+            }
         }
     }
 

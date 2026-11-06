@@ -1,6 +1,7 @@
 package com.vrkendang.view
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.DashPathEffect
@@ -122,6 +123,16 @@ class KendangBoardView @JvmOverloads constructor(
      */
     var slotByZoneId: Map<String, Int> = emptyMap()
 
+    /**
+     * Pemetaan ID kendang (`drum.id`) ke [Bitmap] gambar kulit kendang.
+     * Diberikan oleh [com.vrkendang.image.KitImageLoader] saat aktivasi kit.
+     */
+    var drumBitmaps: Map<String, Bitmap> = emptyMap()
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     /** JNI API bridge ke mesin audio C++ Oboe (dapat disuntikkan fake saat test). */
     var audioEngine: AudioEngineApi = AudioEngineApiImpl
 
@@ -217,6 +228,10 @@ class KendangBoardView @JvmOverloads constructor(
         color = Color.parseColor("#5C3A24")
         style = Paint.Style.STROKE
         strokeWidth = 4f
+    }
+
+    private val drumBitmapPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        isFilterBitmap = true
     }
 
     private val drumSkinPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -353,8 +368,9 @@ class KendangBoardView @JvmOverloads constructor(
 
         val now = SystemClock.uptimeMillis()
 
-        // 2. Render badan kendang 3D terlebih dahulu (di lapisan bawah kulit kendang, urut dari belakang ke depan)
+        // 2. Render badan kendang 3D terlebih dahulu (HANYA untuk kendang tanpa gambar PNG, urut dari belakang ke depan)
         for (drum in currentKit.drums.asReversed()) {
+            if (drumBitmaps.containsKey(drum.id)) continue
             val cx = mapper.toPixelX(drum.center.x)
             val cy = mapper.toPixelY(drum.center.y)
             val rx = mapper.toPixelRadiusX(drum.radius.rx)
@@ -377,16 +393,22 @@ class KendangBoardView @JvmOverloads constructor(
             val rx = baseRx * pulseScale
             val ry = baseRy * pulseScale
 
-            // Kulit kendang alami tanpa tempelan plak kosmetik
             val ovalRect = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
-            canvas.drawOval(ovalRect, drumSkinPaint)
+            val bitmap = drumBitmaps[drum.id]
+            if (bitmap != null) {
+                // Render gambar PNG kendang (kulit dan rim sudah menyatu di dalam file PNG)
+                canvas.drawBitmap(bitmap, null, ovalRect, drumBitmapPaint)
+            } else {
+                // Kulit kendang alami tanpa tempelan plak kosmetik
+                canvas.drawOval(ovalRect, drumSkinPaint)
 
-            // Cincin dalam untuk aksen drumhead
-            val innerRect = RectF(cx - rx * 0.92f, cy - ry * 0.92f, cx + rx * 0.92f, cy + ry * 0.92f)
-            canvas.drawOval(innerRect, drumInnerRingPaint)
+                // Cincin dalam untuk aksen drumhead
+                val innerRect = RectF(cx - rx * 0.92f, cy - ry * 0.92f, cx + rx * 0.92f, cy + ry * 0.92f)
+                canvas.drawOval(innerRect, drumInnerRingPaint)
 
-            // Rim / bingkai kayu tepi kendang
-            canvas.drawOval(ovalRect, drumRimPaint)
+                // Rim / bingkai kayu tepi kendang
+                canvas.drawOval(ovalRect, drumRimPaint)
+            }
 
             // Highlight seleksi jika kendang ini sedang dipilih pada mode EDIT_LAYOUT atau SELECT_ZONE
             if ((mode == BoardMode.EDIT_LAYOUT || mode == BoardMode.SELECT_ZONE) && drum.id == selectedDrumId) {

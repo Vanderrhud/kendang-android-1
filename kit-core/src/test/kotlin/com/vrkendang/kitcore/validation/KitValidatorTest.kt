@@ -327,4 +327,53 @@ class KitValidatorTest {
         val errorsAngle = KitValidator.validate(kitBadAngle)
         assertTrue(errorsAngle.any { it.contains("angle") })
     }
+
+    @Test
+    fun testDrumImageValidation() {
+        val baseKit = createValidKit()
+
+        // Valid image: persis images/<drumId>.png
+        val validImageKit = baseKit.copy(
+            drums = baseKit.drums.map { drum ->
+                drum.copy(image = "images/${drum.id}.png")
+            }
+        )
+        val validErrors = KitValidator.validate(validImageKit)
+        assertTrue(validErrors.isEmpty(), "Valid images should pass: $validErrors")
+
+        // Image null juga harus valid
+        val nullImageKit = baseKit.copy(
+            drums = baseKit.drums.map { drum ->
+                drum.copy(image = null)
+            }
+        )
+        assertTrue(KitValidator.validate(nullImageKit).isEmpty())
+
+        // Nama tidak identik dengan drum.id
+        val mismatchKit = baseKit.copy(
+            drums = listOf(
+                baseKit.drums[0].copy(image = "images/other.png")
+            )
+        )
+        val mismatchErrors = KitValidator.validate(mismatchKit)
+        assertTrue(mismatchErrors.any { it.contains("harus persis 'images/bass.png'") })
+
+        // Path absolut
+        val absoluteKit = baseKit.copy(
+            drums = listOf(
+                baseKit.drums[0].copy(image = "/images/bass.png")
+            )
+        )
+        val absErrors = KitValidator.validate(absoluteKit)
+        assertTrue(absErrors.any { it.contains("tidak boleh absolut") })
+
+        // Path traversal
+        val traversalKit = baseKit.copy(
+            drums = listOf(
+                baseKit.drums[0].copy(image = "images/../bass.png")
+            )
+        )
+        val traversalErrors = KitValidator.validate(traversalKit)
+        assertTrue(traversalErrors.any { it.contains("tidak boleh mengandung '..'") })
+    }
 }

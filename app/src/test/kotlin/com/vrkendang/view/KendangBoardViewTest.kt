@@ -147,4 +147,17 @@ class KendangBoardViewTest {
         assertFalse(handled, "Mode EDIT_LAYOUT tidak boleh memicu play hit")
         assertEquals(0, boardView.activeHighlightsCount)
     }
+
+    @Test
+    fun testDrumBitmapsPropertyAssignment() {
+        val kit = loadNewMetroKit()
+        val boardView = KendangBoardView(object : android.content.ContextWrapper(null) {})
+        boardView.kit = kit
+        boardView.setDimensionsForTest(2000, 1000)
+
+        assertTrue(boardView.drumBitmaps.isEmpty())
+        val fakeBitmaps = mapOf<String, android.graphics.Bitmap>()
+        boardView.drumBitmaps = fakeBitmaps
+        assertEquals(0, boardView.drumBitmaps.size)
+    }
 }

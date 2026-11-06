@@ -3,6 +3,7 @@ package com.vrkendang
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
@@ -16,6 +17,8 @@ import android.widget.TextView
 import com.vrkendang.audio.AudioEngine
 import com.vrkendang.audio.AudioLifecycleManager
 import com.vrkendang.audio.KitAudioLoader
+import com.vrkendang.image.KitImageLoader
+import com.vrkendang.image.KitImageSource
 import com.vrkendang.repository.AssetManagerKitAssetSource
 import com.vrkendang.repository.FileLayoutOverrideSource
 import com.vrkendang.repository.KitRepository
@@ -47,8 +50,10 @@ class MainActivity : Activity() {
     private lateinit var calibrationOverlay: CalibrationOverlayView
     private lateinit var kitRepository: KitRepository
     private val kitAudioLoader = KitAudioLoader()
+    private val kitImageLoader = KitImageLoader()
 
     private var activeKitId: String = KitRepository.DEFAULT_KIT_ID
+    private var currentDrumBitmaps: Map<String, Bitmap> = emptyMap()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -191,6 +196,8 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        kitImageLoader.releaseBitmaps(currentDrumBitmaps)
+        currentDrumBitmaps = emptyMap()
         runCatching { AudioEngine.closeStream() }
             .onFailure { Log.e(TAG, "Gagal menutup stream audio", it) }
     }
@@ -259,6 +266,16 @@ class MainActivity : Activity() {
         val activation = kitAudioLoader.activate(kit, soundSource)
         boardView.kit = kit
         boardView.slotByZoneId = activation.slotByZoneId
+
+        // Muat gambar PNG kendang (Task 3.2)
+        kitImageLoader.releaseBitmaps(currentDrumBitmaps)
+        val imageSource = KitImageSource { path ->
+            kitRepository.openImageStream(kit.kitId, path)
+        }
+        val loadedBitmaps = kitImageLoader.loadImages(kit, imageSource)
+        currentDrumBitmaps = loadedBitmaps
+        boardView.drumBitmaps = loadedBitmaps
+
         headerView.setActiveKitName(kit.name)
     }
 }
