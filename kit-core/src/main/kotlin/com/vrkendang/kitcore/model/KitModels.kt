@@ -1,5 +1,7 @@
 package com.vrkendang.kitcore.model
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -37,6 +39,7 @@ data class ZoneData(
     val gain: Float = 1.0f
 )
 
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class DrumData(
     val id: String,
@@ -44,7 +47,7 @@ data class DrumData(
     val center: Point,
     val radius: Radius,
     val divider: DividerData? = null,
-    val image: String? = null,
+    @EncodeDefault val image: String? = null,
     val zones: List<ZoneData>
 )
 
