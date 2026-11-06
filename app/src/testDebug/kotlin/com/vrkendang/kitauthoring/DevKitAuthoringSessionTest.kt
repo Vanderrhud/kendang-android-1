@@ -404,8 +404,7 @@ class DevKitAuthoringSessionTest {
 
             // Bersihkan devKitDir dan muat ulang dari internal
             session.imagesDir.deleteRecursively()
-            val fakeAssetManager = org.robolectric.RuntimeEnvironment.getApplication().assets
-            val reloaded = session.openActiveKitAsWorkingCopy("test-save-img", internalDir, fakeAssetManager)
+            val reloaded = session.openActiveKitAsWorkingCopy("test-save-img", internalDir)
 
             assertEquals("images/bass.png", reloaded.drums.first { it.id == "bass" }.image)
             assertTrue(File(session.imagesDir, "bass.png").exists(), "Gambar harus dipulihkan ke salinan kerja")

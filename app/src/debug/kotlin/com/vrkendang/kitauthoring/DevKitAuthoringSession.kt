@@ -90,7 +90,7 @@ class DevKitAuthoringSession(
     fun openActiveKitAsWorkingCopy(
         kitId: String,
         internalKitsDir: File,
-        assetManager: AssetManager
+        assetManager: AssetManager? = null
     ): KitData {
         val savedDir = File(internalKitsDir, kitId)
         val savedJsonFile = File(savedDir, "kit.json")
@@ -126,7 +126,8 @@ class DevKitAuthoringSession(
             hasUnsavedChanges = false
             return kit
         }
-        return openBuiltInKit(kitId, assetManager)
+        val assets = assetManager ?: throw IllegalArgumentException("AssetManager diperlukan untuk memuat kit bawaan '$kitId'")
+        return openBuiltInKit(kitId, assets)
     }
 
     /**

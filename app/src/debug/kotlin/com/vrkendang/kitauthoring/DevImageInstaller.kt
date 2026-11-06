@@ -75,7 +75,11 @@ class DevImageInstaller(
 
         // 4. Downsample gambar jika perlu (max 1024 px) dan encode ke PNG bytes
         val finalPngBytes = try {
-            downsampleToPngBytes(bytes, KitImageLoader.MAX_IMAGE_DIMENSION)
+            if (pngHeader.width <= KitImageLoader.MAX_IMAGE_DIMENSION && pngHeader.height <= KitImageLoader.MAX_IMAGE_DIMENSION) {
+                bytes
+            } else {
+                downsampleToPngBytes(bytes, KitImageLoader.MAX_IMAGE_DIMENSION)
+            }
         } catch (e: Exception) {
             return Result.Failure("Gagal memproses gambar: ${e.message}")
         }
