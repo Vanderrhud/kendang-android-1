@@ -30,5 +30,5 @@
 
 ## 5. Verifikasi menyeluruh
 
-- [ ] 5.1 Jalankan CI di GitHub Actions: unit test `:kit-core` dan `:app` lulus, APK debug dan kompilasi release berhasil; laporkan hasil CI apa adanya.
+- [x] 5.1 Jalankan CI di GitHub Actions: unit test `:kit-core` dan `:app` lulus, APK debug dan kompilasi release berhasil; laporkan hasil CI apa adanya.
 - [ ] 5.2 Uji manual di HP fisik: kit lama tanpa gambar tampil sama seperti sebelumnya, kendang bergambar dapat dimainkan dengan highlight benar, PNG rusak tidak menyebabkan crash, dan hasil ekspor-impor mempertahankan gambar.
