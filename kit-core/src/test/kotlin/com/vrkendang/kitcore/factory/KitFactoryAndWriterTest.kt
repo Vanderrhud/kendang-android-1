@@ -5,6 +5,7 @@ import com.vrkendang.kitcore.packageio.KitPackageReader
 import com.vrkendang.kitcore.packageio.KitPackageWriter
 import com.vrkendang.kitcore.validation.KitValidator
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import kotlin.test.*
 
 class KitFactoryAndWriterTest {

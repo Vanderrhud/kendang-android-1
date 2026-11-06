@@ -15,6 +15,17 @@ import java.util.zip.ZipOutputStream
 object KitPackageWriter {
 
     /**
+     * Menyusun paket .vrkendang ke OutputStream (tanpa file gambar PNG).
+     */
+    fun writePackage(
+        kit: KitData,
+        wavProvider: (soundPath: String) -> ByteArray?,
+        outputStream: OutputStream
+    ) {
+        writePackage(kit, wavProvider, outputStream) { null }
+    }
+
+    /**
      * Menyusun paket .vrkendang ke OutputStream.
      * Hanya file WAV dan PNG yang dirujuk oleh kit.json yang disertakan.
      */
@@ -22,7 +33,7 @@ object KitPackageWriter {
         kit: KitData,
         wavProvider: (soundPath: String) -> ByteArray?,
         outputStream: OutputStream,
-        imageProvider: (imagePath: String) -> ByteArray? = { null }
+        imageProvider: (imagePath: String) -> ByteArray?
     ) {
         KitValidator.validateOrThrow(kit)
 
@@ -78,12 +89,22 @@ object KitPackageWriter {
     }
 
     /**
+     * Menyusun paket .vrkendang dan mengembalikan byte array di memori (tanpa file gambar PNG).
+     */
+    fun toByteArray(
+        kit: KitData,
+        wavProvider: (soundPath: String) -> ByteArray?
+    ): ByteArray {
+        return toByteArray(kit, wavProvider) { null }
+    }
+
+    /**
      * Menyusun paket .vrkendang dan mengembalikan byte array di memori.
      */
     fun toByteArray(
         kit: KitData,
         wavProvider: (soundPath: String) -> ByteArray?,
-        imageProvider: (imagePath: String) -> ByteArray? = { null }
+        imageProvider: (imagePath: String) -> ByteArray?
     ): ByteArray {
         val baos = ByteArrayOutputStream()
         writePackage(kit, wavProvider, baos, imageProvider)
