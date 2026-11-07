@@ -20,5 +20,5 @@
 
 ## 4. Verifikasi menyeluruh
 
-- [ ] 4.1 Jalankan CI di GitHub Actions: seluruh unit test `:kit-core` dan `:app` lulus, verifikasi APK release bebas kode Mode Developer lulus, dan artefak APK debug berhasil diterbitkan.
+- [x] 4.1 Jalankan CI di GitHub Actions: seluruh unit test `:kit-core` dan `:app` lulus, verifikasi APK release bebas kode Mode Developer lulus, dan artefak APK debug berhasil diterbitkan.
 - [ ] 4.2 Uji manual di HP fisik: ubah Ukuran, Kelonjongan (`-100%` s/d `+100%`), dan Kemiringan/Rotasi (`0°`–`360°`) pada kendang dengan gambar PNG maupun tanpa gambar, pastikan visual dan area ketuk (hit-testing) tetap presisi untuk efek perspektif POV, uji tombol `↺ Reset Bentuk`, dan pastikan kotak Parameter Putaran Sudut (`divider.angle`) tetap bekerja independen.
