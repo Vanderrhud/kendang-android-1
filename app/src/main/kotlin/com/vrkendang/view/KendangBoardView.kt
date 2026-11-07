@@ -376,7 +376,15 @@ class KendangBoardView @JvmOverloads constructor(
             val rx = mapper.toPixelRadiusX(drum.radius.rx)
             val ry = mapper.toPixelRadiusY(drum.radius.ry)
             if (rx <= 0f || ry <= 0f) continue
+            val needsRotate = drum.rotation != 0f
+            if (needsRotate) {
+                canvas.save()
+                canvas.rotate(drum.rotation, cx, cy)
+            }
             drawDrumBody3D(canvas, cx, cy, rx, ry)
+            if (needsRotate) {
+                canvas.restore()
+            }
         }
 
         // 3. Render seluruh kulit kendang (sesuai urutan z-order: indeks 0 di atas, render dari belakang ke depan)
@@ -395,6 +403,13 @@ class KendangBoardView @JvmOverloads constructor(
 
             val ovalRect = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
             val bitmap = drumBitmaps[drum.id]
+
+            val needsRotate = drum.rotation != 0f
+            if (needsRotate) {
+                canvas.save()
+                canvas.rotate(drum.rotation, cx, cy)
+            }
+
             if (bitmap != null) {
                 // Render gambar PNG kendang (kulit dan rim sudah menyatu di dalam file PNG)
                 canvas.drawBitmap(bitmap, null, ovalRect, drumBitmapPaint)
@@ -413,6 +428,10 @@ class KendangBoardView @JvmOverloads constructor(
             // Highlight seleksi jika kendang ini sedang dipilih pada mode EDIT_LAYOUT atau SELECT_ZONE
             if ((mode == BoardMode.EDIT_LAYOUT || mode == BoardMode.SELECT_ZONE) && drum.id == selectedDrumId) {
                 canvas.drawOval(ovalRect, selectionPaint)
+            }
+
+            if (needsRotate) {
+                canvas.restore()
             }
         }
 
@@ -489,6 +508,12 @@ class KendangBoardView @JvmOverloads constructor(
             val ovalRect = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
             val ovalPath = Path().apply { addOval(ovalRect, Path.Direction.CW) }
 
+            val needsRotate = drum.rotation != 0f
+            if (needsRotate) {
+                canvas.save()
+                canvas.rotate(drum.rotation, cx, cy)
+            }
+
             when (drum.model) {
                 "bass" -> {
                     val divider = drum.divider
@@ -563,7 +588,11 @@ class KendangBoardView @JvmOverloads constructor(
                 }
             }
 
-            // Gambar label nama kendang di atas rim jika di mode EDIT_LAYOUT
+            if (needsRotate) {
+                canvas.restore()
+            }
+
+            // Gambar label nama kendang di atas rim jika di mode EDIT_LAYOUT (teks tetap tegak)
             if (mode == BoardMode.EDIT_LAYOUT) {
                 val displayName = when (drum.id) {
                     "bass" -> "Bass"
@@ -572,19 +601,37 @@ class KendangBoardView @JvmOverloads constructor(
                     "kecil2" -> "Kecil 2"
                     else -> drum.id
                 }
+                val rad = Math.toRadians(drum.rotation.toDouble())
+                val sinTheta = kotlin.math.sin(rad).toFloat()
+                val cosTheta = kotlin.math.cos(rad).toFloat()
+                val maxY = sqrt((rx * sinTheta) * (rx * sinTheta) + (ry * cosTheta) * (ry * cosTheta))
                 canvas.drawText(
                     displayName,
                     cx,
-                    (cy - ry - 8f * density).coerceAtLeast(16f * density),
+                    (cy - maxY - 8f * density).coerceAtLeast(16f * density),
                     drumTitlePaint
                 )
             }
 
-            // Gambar lencana (badge) hanya jika showZoneTextBadges diaktifkan secara eksplisit
+            // Gambar lencana (badge) hanya jika showZoneTextBadges diaktifkan secara eksplisit (teks tetap tegak)
             if (showZoneTextBadges) {
                 for (zone in drum.zones) {
                     val pos = computeZoneLabelPosition(drum, zone, cx, cy, rx, ry)
-                    drawZoneBadge(canvas, zone, pos.first, pos.second, density)
+                    val badgeX: Float
+                    val badgeY: Float
+                    if (drum.rotation != 0f) {
+                        val rad = Math.toRadians(drum.rotation.toDouble())
+                        val cos = kotlin.math.cos(rad).toFloat()
+                        val sin = kotlin.math.sin(rad).toFloat()
+                        val dx = pos.first - cx
+                        val dy = pos.second - cy
+                        badgeX = cx + (dx * cos - dy * sin)
+                        badgeY = cy + (dx * sin + dy * cos)
+                    } else {
+                        badgeX = pos.first
+                        badgeY = pos.second
+                    }
+                    drawZoneBadge(canvas, zone, badgeX, badgeY, density)
                 }
             }
         }
@@ -785,6 +832,19 @@ class KendangBoardView @JvmOverloads constructor(
             }
         }
         return true
+    }
+
+    /**
+     * Mencari kendang yang berada di koordinat piksel tertentu.
+     * Mengembalikan null jika di luar seluruh kendang atau di luar kanvas.
+     * Memperhitungkan rotasi kendang melalui HitTester.
+     */
+    fun findDrumAtPixel(pixelX: Float, pixelY: Float): DrumData? {
+        val currentKit = kit ?: return null
+        if (!mapper.isInsideCanvas(pixelX, pixelY)) return null
+        val canvasPt = mapper.toCanvasCoordinates(pixelX, pixelY) ?: return null
+        val hitKit = effectiveKitForHitAndClamp(currentKit)
+        return HitTester.findHit(hitKit, canvasPt.x, canvasPt.y)?.drum
     }
 
     /**

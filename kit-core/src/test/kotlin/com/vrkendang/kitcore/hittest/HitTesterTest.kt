@@ -301,4 +301,115 @@ class HitTesterTest {
         assertNotNull(hitMid)
         assertEquals("bass-3", hitMid.id)
     }
+
+    @Test
+    fun testRotatedOvalHitTesting() {
+        // Kendang oval mendatar rx=0.30, ry=0.10, aspect=1.0
+        // Jika unrotated (rotation = 0):
+        //   Titik (0.50 + 0.20, 0.50) -> dx=0.20 <= 0.30 (INSIDE)
+        //   Titik (0.50, 0.50 + 0.20) -> dy=0.20 > 0.10 (OUTSIDE)
+        // Jika dirotasi 90 derajat searah jarum jam:
+        //   Sumbu panjang rx sekarang sejajar sumbu Y, sumbu pendek ry sejajar sumbu X.
+        //   Titik (0.50 + 0.20, 0.50) -> rotDx=0, rotDy=-0.20 -> (0/0.3)^2 + (-0.2/0.1)^2 = 4.0 > 1.0 (OUTSIDE)
+        //   Titik (0.50, 0.50 + 0.20) -> rotDx=0.20, rotDy=0 -> (0.2/0.3)^2 + (0/0.1)^2 = 0.44 <= 1.0 (INSIDE)
+        val rotatedOvalKit = KitData(
+            formatVersion = 1,
+            kitId = "rotated-oval-kit",
+            name = "Rotated Oval Kit",
+            canvasAspect = 1.0f,
+            drums = listOf(
+                DrumData(
+                    id = "drum-rot-oval",
+                    model = "single",
+                    center = Point(0.50f, 0.50f),
+                    radius = Radius(0.30f, 0.10f),
+                    rotation = 90.0f,
+                    zones = listOf(ZoneData(id = "single-rot", region = "full"))
+                )
+            )
+        )
+
+        // Titik (0.50, 0.70): di dalam oval yang diputar 90 derajat
+        val hitInside = HitTester.findZone(rotatedOvalKit, 0.50f, 0.70f)
+        assertNotNull(hitInside, "Titik (0.50, 0.70) harus masuk kendang oval yang diputar 90 derajat")
+        assertEquals("single-rot", hitInside.id)
+
+        // Titik (0.70, 0.50): di luar oval yang diputar 90 derajat
+        val hitOutside = HitTester.findZone(rotatedOvalKit, 0.70f, 0.50f)
+        assertNull(hitOutside, "Titik (0.70, 0.50) harus berada di luar kendang oval yang diputar 90 derajat")
+    }
+
+    @Test
+    fun testRotatedSplitDrumWithDividerAngle() {
+        // Kendang model split (2 zona: upper dan lower dengan garis horizontal saat rotation=0, angle=0)
+        // Jika drum.rotation = 90 derajat:
+        // Titik lokal Y < cy (upper) yang awalnya di atas pusat sekarang berotasi 90 derajat searah jarum jam ke sisi KANAN pusat.
+        // Titik lokal Y > cy (lower) yang awalnya di bawah pusat berotasi ke sisi KIRI pusat.
+        val rotatedSplitKit = KitData(
+            formatVersion = 1,
+            kitId = "rotated-split-kit",
+            name = "Rotated Split Kit",
+            canvasAspect = 1.0f,
+            drums = listOf(
+                DrumData(
+                    id = "split-rot",
+                    model = "split",
+                    center = Point(0.50f, 0.50f),
+                    radius = Radius(0.20f, 0.20f),
+                    rotation = 90.0f,
+                    divider = DividerData(angle = 0f),
+                    zones = listOf(
+                        ZoneData(id = "zone-lower", region = "lower"),
+                        ZoneData(id = "zone-upper", region = "upper")
+                    )
+                )
+            )
+        )
+
+        // Titik di kiri pusat (0.35, 0.50) -> dx = -0.15, dy = 0.
+        // rotDx = dx*cos(90) + dy*sin(90) = 0
+        // rotDy = -dx*sin(90) + dy*cos(90) = -(-0.15) = +0.15 -> localYu = 0.50 + 0.15 = 0.65 > cy (lower)
+        val hitLeft = HitTester.findZone(rotatedSplitKit, 0.35f, 0.50f)
+        assertNotNull(hitLeft)
+        assertEquals("zone-lower", hitLeft.id)
+
+        // Titik di kanan pusat (0.65, 0.50) -> dx = +0.15, dy = 0.
+        // rotDx = 0
+        // rotDy = -(+0.15)*1 = -0.15 -> localYu = 0.50 - 0.15 = 0.35 < cy (upper)
+        val hitRight = HitTester.findZone(rotatedSplitKit, 0.65f, 0.50f)
+        assertNotNull(hitRight)
+        assertEquals("zone-upper", hitRight.id)
+    }
+
+    @Test
+    fun testRotatedBassDrum() {
+        // Kendang bass dengan rotasi 180 derajat
+        // Pusat C_div aslinya di sebelah kiri pusat kendang (dx = -0.30).
+        // Ketika dirotasi 180 derajat, C_div berpindah ke sebelah kanan pusat kendang.
+        val rotatedBass = DrumData(
+            id = "bass-rot",
+            model = "bass",
+            center = Point(0.50f, 0.50f),
+            radius = Radius(0.30f, 0.30f),
+            rotation = 180.0f,
+            divider = DividerData(dx = -0.30f, dy = 0.0f, r = 0.80f),
+            zones = listOf(
+                ZoneData(id = "bass-main", region = "main"),
+                ZoneData(id = "bass-crescent", region = "crescent", band = 0)
+            )
+        )
+        val kitBassRot = KitData(
+            kitId = "rotated-bass-kit",
+            name = "Rotated Bass Kit",
+            canvasAspect = 1.0f,
+            drums = listOf(rotatedBass)
+        )
+
+        // Pada rotasi 0, main zone ada di sebelah kiri (misal x = 0.40, y = 0.50).
+        // Pada rotasi 180: titik (x = 0.60, y = 0.50) -> dx = 0.10.
+        // rotDx = 0.10 * cos(180) = -0.10 -> localXu = 0.50 - 0.10 = 0.40 (di dalam main zone C_div!)
+        val hitMainRot = HitTester.findZone(kitBassRot, 0.60f, 0.50f)
+        assertNotNull(hitMainRot)
+        assertEquals("bass-main", hitMainRot.id)
+    }
 }

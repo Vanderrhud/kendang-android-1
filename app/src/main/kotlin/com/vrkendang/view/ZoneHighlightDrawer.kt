@@ -66,98 +66,110 @@ object ZoneHighlightDrawer {
 
         val drumOval = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
 
-        when (drum.model) {
-            "single" -> {
-                canvas.drawOval(drumOval, highlightPaint)
-            }
+        val needsRotate = drum.rotation != 0f
+        if (needsRotate) {
+            canvas.save()
+            canvas.rotate(drum.rotation, cx, cy)
+        }
 
-            "split" -> {
-                val zoneCount = drum.zones.size
-                val angleOffset = drum.divider?.angle ?: 0f
-                if (zoneCount == 2 && angleOffset == 0f && drum.zones.any { it.region == "upper" }) {
-                    canvas.save()
-                    if (zone.region == "upper") {
-                        canvas.clipRect(cx - rx, cy - ry, cx + rx, cy)
+        try {
+            when (drum.model) {
+                "single" -> {
+                    canvas.drawOval(drumOval, highlightPaint)
+                }
+
+                "split" -> {
+                    val zoneCount = drum.zones.size
+                    val angleOffset = drum.divider?.angle ?: 0f
+                    if (zoneCount == 2 && angleOffset == 0f && drum.zones.any { it.region == "upper" }) {
+                        canvas.save()
+                        if (zone.region == "upper") {
+                            canvas.clipRect(cx - rx, cy - ry, cx + rx, cy)
+                        } else {
+                            canvas.clipRect(cx - rx, cy, cx + rx, cy + ry)
+                        }
+                        canvas.drawOval(drumOval, highlightPaint)
+                        canvas.restore()
+                    } else if (zoneCount > 1) {
+                        val zoneIndex = drum.zones.indexOfFirst { it.id == zone.id }.takeIf { it >= 0 } ?: 0
+                        val sliceDeg = 360f / zoneCount
+                        val startAngle = ((angleOffset + zoneIndex * sliceDeg) % 360f + 360f) % 360f
+                        canvas.drawArc(drumOval, startAngle, sliceDeg, true, highlightPaint)
                     } else {
-                        canvas.clipRect(cx - rx, cy, cx + rx, cy + ry)
+                        canvas.drawOval(drumOval, highlightPaint)
                     }
-                    canvas.drawOval(drumOval, highlightPaint)
-                    canvas.restore()
-                } else if (zoneCount > 1) {
-                    val zoneIndex = drum.zones.indexOfFirst { it.id == zone.id }.takeIf { it >= 0 } ?: 0
-                    val sliceDeg = 360f / zoneCount
-                    val startAngle = ((angleOffset + zoneIndex * sliceDeg) % 360f + 360f) % 360f
-                    canvas.drawArc(drumOval, startAngle, sliceDeg, true, highlightPaint)
-                } else {
-                    canvas.drawOval(drumOval, highlightPaint)
-                }
-            }
-
-            "bass" -> {
-                if (drum.zones.size <= 1) {
-                    canvas.drawOval(drumOval, highlightPaint)
-                    return
                 }
 
-                val divider = drum.divider
-                if (divider == null) {
-                    canvas.drawOval(drumOval, highlightPaint)
-                    return
-                }
-
-                val divCenterX = cx + (divider.dx * rx)
-                val divCenterY = cy + (divider.dy * ry)
-                val divRx = divider.effectiveRx * rx
-                val divRy = divider.effectiveRy * ry
-
-                val divOvalRect = RectF(divCenterX - divRx, divCenterY - divRy, divCenterX + divRx, divCenterY + divRy)
-                val divOvalPath = Path().apply {
-                    addOval(divOvalRect, Path.Direction.CW)
-                }
-
-                if (zone.region == "main") {
-                    canvas.save()
-                    canvas.clipPath(divOvalPath)
-                    canvas.drawOval(drumOval, highlightPaint)
-                    canvas.restore()
-                } else {
-                    val crescentZones = drum.zones.filter { it.region == "crescent" }
-                    val bandIndex = crescentZones.indexOfFirst { it.id == zone.id }.coerceAtLeast(0)
-                    val splits = divider.splits ?: when (crescentZones.size) {
-                        2 -> listOf(0.5f)
-                        3 -> listOf(0.333f, 0.667f)
-                        4 -> listOf(0.25f, 0.50f, 0.75f)
-                        else -> emptyList()
+                "bass" -> {
+                    if (drum.zones.size <= 1) {
+                        canvas.drawOval(drumOval, highlightPaint)
+                        return
                     }
-                    val splitRanges = mutableListOf<Pair<Float, Float>>()
-                    var prev = 0f
-                    for (s in splits) {
-                        splitRanges.add(Pair(prev, s))
-                        prev = s
+
+                    val divider = drum.divider
+                    if (divider == null) {
+                        canvas.drawOval(drumOval, highlightPaint)
+                        return
                     }
-                    splitRanges.add(Pair(prev, 1f))
 
-                    val (y0, y1) = splitRanges.getOrNull(bandIndex) ?: Pair(0f, 1f)
-                    val top = cy - ry
-                    val totalHeight = 2f * ry
-                    val bandTop = top + y0 * totalHeight
-                    val bandBottom = top + y1 * totalHeight
+                    val divCenterX = cx + (divider.dx * rx)
+                    val divCenterY = cy + (divider.dy * ry)
+                    val divRx = divider.effectiveRx * rx
+                    val divRy = divider.effectiveRy * ry
 
-                    canvas.save()
-                    canvas.clipRect(cx - rx, bandTop, cx + rx, bandBottom)
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        canvas.clipOutPath(divOvalPath)
+                    val divOvalRect = RectF(divCenterX - divRx, divCenterY - divRy, divCenterX + divRx, divCenterY + divRy)
+                    val divOvalPath = Path().apply {
+                        addOval(divOvalRect, Path.Direction.CW)
+                    }
+
+                    if (zone.region == "main") {
+                        canvas.save()
+                        canvas.clipPath(divOvalPath)
+                        canvas.drawOval(drumOval, highlightPaint)
+                        canvas.restore()
                     } else {
-                        @Suppress("DEPRECATION")
-                        canvas.clipPath(divOvalPath, android.graphics.Region.Op.DIFFERENCE)
+                        val crescentZones = drum.zones.filter { it.region == "crescent" }
+                        val bandIndex = crescentZones.indexOfFirst { it.id == zone.id }.coerceAtLeast(0)
+                        val splits = divider.splits ?: when (crescentZones.size) {
+                            2 -> listOf(0.5f)
+                            3 -> listOf(0.333f, 0.667f)
+                            4 -> listOf(0.25f, 0.50f, 0.75f)
+                            else -> emptyList()
+                        }
+                        val splitRanges = mutableListOf<Pair<Float, Float>>()
+                        var prev = 0f
+                        for (s in splits) {
+                            splitRanges.add(Pair(prev, s))
+                            prev = s
+                        }
+                        splitRanges.add(Pair(prev, 1f))
+
+                        val (y0, y1) = splitRanges.getOrNull(bandIndex) ?: Pair(0f, 1f)
+                        val top = cy - ry
+                        val totalHeight = 2f * ry
+                        val bandTop = top + y0 * totalHeight
+                        val bandBottom = top + y1 * totalHeight
+
+                        canvas.save()
+                        canvas.clipRect(cx - rx, bandTop, cx + rx, bandBottom)
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            canvas.clipOutPath(divOvalPath)
+                        } else {
+                            @Suppress("DEPRECATION")
+                            canvas.clipPath(divOvalPath, android.graphics.Region.Op.DIFFERENCE)
+                        }
+                        canvas.drawOval(drumOval, highlightPaint)
+                        canvas.restore()
                     }
+                }
+
+                else -> {
                     canvas.drawOval(drumOval, highlightPaint)
-                    canvas.restore()
                 }
             }
-
-            else -> {
-                canvas.drawOval(drumOval, highlightPaint)
+        } finally {
+            if (needsRotate) {
+                canvas.restore()
             }
         }
     }

@@ -40,17 +40,31 @@ object HitTester {
 
             if (rx <= 0f || ry <= 0f) continue
 
+            // 0. Transformasi rotasi balik jika kendang memiliki orientasi rotation
+            val (localXu, localYu) = if (drum.rotation != 0f) {
+                val rad = Math.toRadians(drum.rotation.toDouble())
+                val cos = kotlin.math.cos(rad).toFloat()
+                val sin = kotlin.math.sin(rad).toFloat()
+                val dx = xu - cxu
+                val dy = yu - cyu
+                val rotDx = dx * cos + dy * sin
+                val rotDy = -dx * sin + dy * cos
+                Pair(cxu + rotDx, cyu + rotDy)
+            } else {
+                Pair(xu, yu)
+            }
+
             // 1. Uji apakah berada di dalam oval/lingkaran kulit kendang:
             // ((X_u - CX_u) / rx)^2 + ((Y_u - CY_u) / ry)^2 <= 1.0
-            val normDx = (xu - cxu) / rx
-            val normDy = (yu - cyu) / ry
+            val normDx = (localXu - cxu) / rx
+            val normDy = (localYu - cyu) / ry
             val distanceSq = normDx * normDx + normDy * normDy
 
             if (distanceSq <= 1.0f) {
                 // Berada di dalam kulit kendang, tentukan zona berdasarkan model
                 val matchedZone = when (drum.model) {
-                    "bass" -> findBassZone(drum, xu, yu, cxu, cyu, rx, ry)
-                    "split" -> findSplitZone(drum, xu, yu, cxu, cyu, rx, ry)
+                    "bass" -> findBassZone(drum, localXu, localYu, cxu, cyu, rx, ry)
+                    "split" -> findSplitZone(drum, localXu, localYu, cxu, cyu, rx, ry)
                     "single" -> findSingleZone(drum)
                     else -> null
                 }

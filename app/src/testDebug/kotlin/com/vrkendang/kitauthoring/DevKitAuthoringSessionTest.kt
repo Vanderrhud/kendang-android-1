@@ -413,4 +413,117 @@ class DevKitAuthoringSessionTest {
             internalDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun testToSizeAndAspectAndToRadiusRoundTrip() {
+        // 1. Bulat sempurna (Kelonjongan 0%)
+        val radiusCircle = DevKitAuthoringSession.toRadius(0.20f, 0f)
+        assertEquals(0.20f, radiusCircle.rx, 0.0001f)
+        assertEquals(0.20f, radiusCircle.ry, 0.0001f)
+        val (sizeCircle, aspectCircle) = DevKitAuthoringSession.toSizeAndAspect(radiusCircle.rx, radiusCircle.ry)
+        assertEquals(0.20f, sizeCircle, 0.0001f)
+        assertEquals(0.0f, aspectCircle, 0.0001f)
+
+        // 2. Lonjong mendatar (Kelonjongan negatif -50%)
+        val radiusHorizontal = DevKitAuthoringSession.toRadius(0.20f, -50.0f)
+        assertEquals(0.20f, radiusHorizontal.rx, 0.0001f)
+        // ry = 0.20 * (1.0 - 0.90 * 0.50) = 0.20 * 0.55 = 0.11
+        assertEquals(0.11f, radiusHorizontal.ry, 0.0001f)
+        val (sizeHoriz, aspectHoriz) = DevKitAuthoringSession.toSizeAndAspect(radiusHorizontal.rx, radiusHorizontal.ry)
+        assertEquals(0.20f, sizeHoriz, 0.0001f)
+        assertEquals(-50.0f, aspectHoriz, 0.05f)
+
+        // 3. Lonjong tegak (Kelonjongan positif +50%)
+        val radiusVertical = DevKitAuthoringSession.toRadius(0.20f, 50.0f)
+        assertEquals(0.11f, radiusVertical.rx, 0.0001f)
+        assertEquals(0.20f, radiusVertical.ry, 0.0001f)
+        val (sizeVert, aspectVert) = DevKitAuthoringSession.toSizeAndAspect(radiusVertical.rx, radiusVertical.ry)
+        assertEquals(0.20f, sizeVert, 0.0001f)
+        assertEquals(50.0f, aspectVert, 0.05f)
+
+        // 4. Ekstrem -100% (Ketebalan minimum 10% dari S)
+        val radiusMinHoriz = DevKitAuthoringSession.toRadius(0.20f, -100.0f)
+        assertEquals(0.20f, radiusMinHoriz.rx, 0.0001f)
+        assertEquals(0.02f, radiusMinHoriz.ry, 0.0001f)
+        val (sizeMinH, aspectMinH) = DevKitAuthoringSession.toSizeAndAspect(radiusMinHoriz.rx, radiusMinHoriz.ry)
+        assertEquals(0.20f, sizeMinH, 0.0001f)
+        assertEquals(-100.0f, aspectMinH, 0.05f)
+
+        // 5. Ekstrem +100% (Ketebalan minimum 10% dari S)
+        val radiusMinVert = DevKitAuthoringSession.toRadius(0.20f, 100.0f)
+        assertEquals(0.02f, radiusMinVert.rx, 0.0001f)
+        assertEquals(0.20f, radiusMinVert.ry, 0.0001f)
+        val (sizeMinV, aspectMinV) = DevKitAuthoringSession.toSizeAndAspect(radiusMinVert.rx, radiusMinVert.ry)
+        assertEquals(0.20f, sizeMinV, 0.0001f)
+        assertEquals(100.0f, aspectMinV, 0.05f)
+    }
+
+    @Test
+    fun testConsistencyWhenSizeIsChangedWithAspect() {
+        val tempDir = File.createTempFile("dev-session-size-aspect", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-shape", "Test Shape", null)
+
+            // Bentuk oval awal: Ukuran 0.20, Kelonjongan -40%
+            val updated1 = session.updateDrumShape("sedang", 0.20f, -40.0f)
+            val drum1 = updated1.drums.first { it.id == "sedang" }
+            val (size1, aspect1) = DevKitAuthoringSession.toSizeAndAspect(drum1.radius.rx, drum1.radius.ry)
+            assertEquals(0.20f, size1, 0.001f)
+            assertEquals(-40.0f, aspect1, 0.05f)
+
+            // Perbesar ukuran menjadi 0.35 dengan menjaga kelonjongan tetap -40%
+            val updated2 = session.updateDrumShape("sedang", 0.35f, aspect1)
+            val drum2 = updated2.drums.first { it.id == "sedang" }
+            val (size2, aspect2) = DevKitAuthoringSession.toSizeAndAspect(drum2.radius.rx, drum2.radius.ry)
+            assertEquals(0.35f, size2, 0.001f)
+            assertEquals(-40.0f, aspect2, 0.05f)
+            assertTrue(session.hasUnsavedChanges)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun testUpdateDrumRotationAndResetDrumShape() {
+        val tempDir = File.createTempFile("dev-session-rot-reset", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-rot-reset", "Test Rot Reset", null)
+
+            // 1. Update rotasi kendang
+            val rotKit = session.updateDrumRotation("sedang", 45.0f)
+            val drumRot = rotKit.drums.first { it.id == "sedang" }
+            assertEquals(45.0f, drumRot.rotation, 0.001f)
+
+            // 2. Wrap rotasi di luar 0..360
+            val wrapKit = session.updateDrumRotation("sedang", 380.0f)
+            assertEquals(20.0f, wrapKit.drums.first { it.id == "sedang" }.rotation, 0.001f)
+
+            val negWrapKit = session.updateDrumRotation("sedang", -30.0f)
+            assertEquals(330.0f, negWrapKit.drums.first { it.id == "sedang" }.rotation, 0.001f)
+
+            // 3. Ubah bentuk menjadi oval dan rotasi 60 derajat
+            session.updateDrumShape("sedang", 0.25f, 60.0f)
+            session.updateDrumRotation("sedang", 60.0f)
+
+            val preReset = session.workingKit!!.drums.first { it.id == "sedang" }
+            assertTrue(preReset.radius.rx != preReset.radius.ry)
+            assertEquals(60.0f, preReset.rotation, 0.001f)
+
+            // 4. Reset bentuk
+            val resetKit = session.resetDrumShape("sedang")
+            val postReset = resetKit.drums.first { it.id == "sedang" }
+
+            // Kelonjongan harus kembali bulat sempurna (rx == ry == S)
+            assertEquals(0.25f, postReset.radius.rx, 0.001f)
+            assertEquals(0.25f, postReset.radius.ry, 0.001f)
+            assertEquals(0.0f, postReset.rotation, 0.001f)
+            val (_, aspectReset) = DevKitAuthoringSession.toSizeAndAspect(postReset.radius.rx, postReset.radius.ry)
+            assertEquals(0.0f, aspectReset, 0.001f)
+            assertTrue(session.hasUnsavedChanges)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

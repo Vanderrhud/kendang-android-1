@@ -61,6 +61,9 @@ object KitValidator {
             if (drum.radius.rx <= 0.0f || drum.radius.rx > 5.0f || drum.radius.ry <= 0.0f || drum.radius.ry > 5.0f) {
                 errors.add("Radius rx dan ry drum '${drum.id}' harus > 0.0 dan <= 5.0 (ditemukan: rx=${drum.radius.rx}, ry=${drum.radius.ry})")
             }
+            if (drum.rotation !in 0.0f..360.0f) {
+                errors.add("Rotasi drum '${drum.id}' harus di rentang 0.0..360.0 (ditemukan: ${drum.rotation})")
+            }
 
             // 3. Validasi Model dan Region
             when (drum.model) {

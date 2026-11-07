@@ -19,6 +19,8 @@ import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * Pengelola sesi Mode Developer untuk penyusunan kit (Tahap 11).
@@ -38,6 +40,47 @@ class DevKitAuthoringSession(
     private val soundInstaller: DevSoundInstaller = DevSoundInstaller(),
     private val json: Json = Json { prettyPrint = true }
 ) {
+
+    companion object {
+        const val MIN_ASPECT_RATIO = 0.10f
+
+        /**
+         * Mengonversi (rx, ry) menjadi pasangan (Ukuran S, Kelonjongan E dalam %).
+         * S = max(rx, ry)
+         * E in -100.0..+100.0 (negatif = lonjong mendatar rx > ry, positif = lonjong tegak ry > rx, 0 = bulat).
+         */
+        fun toSizeAndAspect(rx: Float, ry: Float): Pair<Float, Float> {
+            val s = max(rx, ry)
+            if (s <= 0f) return Pair(0f, 0f)
+            val aspect = if (rx >= ry) {
+                val ratio = (ry / rx).coerceIn(MIN_ASPECT_RATIO, 1.0f)
+                -((1.0f - ratio) / (1.0f - MIN_ASPECT_RATIO)) * 100.0f
+            } else {
+                val ratio = (rx / ry).coerceIn(MIN_ASPECT_RATIO, 1.0f)
+                +((1.0f - ratio) / (1.0f - MIN_ASPECT_RATIO)) * 100.0f
+            }
+            return Pair(s, aspect.coerceIn(-100.0f, 100.0f))
+        }
+
+        /**
+         * Mengonversi (Ukuran S, Kelonjongan E dalam %) menjadi Radius(rx, ry).
+         */
+        fun toRadius(size: Float, aspectPercent: Float): Radius {
+            val s = size.coerceIn(0.01f, 5.0f)
+            val e = aspectPercent.coerceIn(-100.0f, 100.0f)
+            return when {
+                e == 0f -> Radius(s, s)
+                e < 0f -> {
+                    val factor = 1.0f - (1.0f - MIN_ASPECT_RATIO) * (-e / 100.0f)
+                    Radius(s, (s * factor).coerceAtLeast(0.001f))
+                }
+                else -> {
+                    val factor = 1.0f - (1.0f - MIN_ASPECT_RATIO) * (e / 100.0f)
+                    Radius((s * factor).coerceAtLeast(0.001f), s)
+                }
+            }
+        }
+    }
 
     enum class BoardMode {
         UJI,
@@ -389,6 +432,50 @@ class DevKitAuthoringSession(
         val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
         val updatedDrums = kit.drums.map { drum ->
             if (drum.id == drumId) drum.copy(radius = newRadius) else drum
+        }
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Mengubah bentuk kendang berdasarkan ukuran (S) dan kelonjongan (E dalam %).
+     */
+    fun updateDrumShape(drumId: String, size: Float, aspectPercent: Float): KitData {
+        val newRadius = toRadius(size, aspectPercent)
+        return updateDrumRadius(drumId, newRadius)
+    }
+
+    /**
+     * Mengatur rotasi orientasi kendang (0.0 s.d. 360.0 derajat).
+     */
+    fun updateDrumRotation(drumId: String, rotation: Float): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val clampedRotation = ((rotation % 360f) + 360f) % 360f
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.id == drumId) drum.copy(rotation = clampedRotation) else drum
+        }
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Mengembalikan bentuk kendang menjadi bulat sempurna (kelonjongan 0%) dan rotasi 0 derajat.
+     */
+    fun resetDrumShape(drumId: String): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val targetDrum = kit.drums.firstOrNull { it.id == drumId } ?: return kit
+        val s = max(targetDrum.radius.rx, targetDrum.radius.ry).takeIf { it > 0f } ?: 0.16f
+        val resetRadius = Radius(s, s)
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.id == drumId) {
+                drum.copy(radius = resetRadius, rotation = 0f)
+            } else drum
         }
         val updated = kit.copy(drums = updatedDrums)
         writeKitJsonToDisk(updated)

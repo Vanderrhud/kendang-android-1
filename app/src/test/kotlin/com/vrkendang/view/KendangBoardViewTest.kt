@@ -2,13 +2,19 @@ package com.vrkendang.view
 
 import android.view.MotionEvent
 import com.vrkendang.audio.AudioEngineApi
+import com.vrkendang.kitcore.model.DrumData
 import com.vrkendang.kitcore.model.KitData
+import com.vrkendang.kitcore.model.Point
+import com.vrkendang.kitcore.model.Radius
+import com.vrkendang.kitcore.model.ZoneData
 import com.vrkendang.kitcore.parser.KitJsonParser
 import java.io.File
 import java.nio.ByteBuffer
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class KendangBoardViewTest {
@@ -159,5 +165,77 @@ class KendangBoardViewTest {
         val fakeBitmaps = mapOf<String, android.graphics.Bitmap>()
         boardView.drumBitmaps = fakeBitmaps
         assertEquals(0, boardView.drumBitmaps.size)
+    }
+
+    @Test
+    fun testFindDrumAtPixelWithRotatedOval() {
+        // Kit dengan canvasAspect 1.0 agar X dan Y proporsional langsung
+        val rotatedDrum = DrumData(
+            id = "drum-rot",
+            model = "single",
+            center = Point(0.50f, 0.50f),
+            radius = Radius(0.30f, 0.10f),
+            rotation = 90.0f,
+            zones = listOf(ZoneData(id = "rot-zone", region = "full"))
+        )
+        val kit = KitData(
+            kitId = "rot-test",
+            name = "Rot Test",
+            canvasAspect = 1.0f,
+            drums = listOf(rotatedDrum)
+        )
+
+        val boardView = KendangBoardView(object : android.content.ContextWrapper(null) {})
+        boardView.kit = kit
+        boardView.setDimensionsForTest(1000, 1000)
+
+        // Pusat: x=500, y=500 -> harus mengenai drum
+        val centerHit = boardView.findDrumAtPixel(500f, 500f)
+        assertNotNull(centerHit)
+        assertEquals("drum-rot", centerHit.id)
+
+        // Karena dirotasi 90 derajat, sumbu panjang rx=0.30 (300px) mengarah vertikal (Y),
+        // sedangkan sumbu pendek ry=0.10 (100px) mengarah horizontal (X).
+        // Titik vertikal (x=500, y=700) -> dy = 200px <= 300px -> INSIDE
+        val verticalHit = boardView.findDrumAtPixel(500f, 700f)
+        assertNotNull(verticalHit, "Piksel vertikal di dalam rotasi 90 derajat harus terdeteksi")
+        assertEquals("drum-rot", verticalHit.id)
+
+        // Titik horizontal (x=700, y=500) -> dx = 200px > 100px -> OUTSIDE
+        val horizontalMiss = boardView.findDrumAtPixel(700f, 500f)
+        assertNull(horizontalMiss, "Piksel horizontal di luar ketebalan rotasi 90 derajat harus bernilai null")
+    }
+
+    @Test
+    fun testHandleTouchAtWithRotatedDrum() {
+        val rotatedDrum = DrumData(
+            id = "drum-rot",
+            model = "single",
+            center = Point(0.50f, 0.50f),
+            radius = Radius(0.30f, 0.10f),
+            rotation = 90.0f,
+            zones = listOf(ZoneData(id = "rot-zone", region = "full"))
+        )
+        val kit = KitData(
+            kitId = "rot-touch-test",
+            name = "Rot Touch Test",
+            canvasAspect = 1.0f,
+            drums = listOf(rotatedDrum)
+        )
+
+        val fakeEngine = FakeAudioEngine()
+        val boardView = KendangBoardView(object : android.content.ContextWrapper(null) {})
+        boardView.kit = kit
+        boardView.audioEngine = fakeEngine
+        boardView.setDimensionsForTest(1000, 1000)
+
+        // Sentuhan pada piksel yang berada di dalam oval rotasi (500, 700)
+        val handled = boardView.handleTouchAt(500f, 700f, MotionEvent.ACTION_DOWN)
+        assertTrue(handled, "Sentuhan di dalam kendang yang dirotasi harus tertangani")
+        assertEquals(1, boardView.activeHighlightsCount)
+
+        // Sentuhan pada piksel di luar oval rotasi (700, 500)
+        val missed = boardView.handleTouchAt(700f, 500f, MotionEvent.ACTION_DOWN)
+        assertFalse(missed, "Sentuhan di luar kendang yang dirotasi harus diabaikan")
     }
 }

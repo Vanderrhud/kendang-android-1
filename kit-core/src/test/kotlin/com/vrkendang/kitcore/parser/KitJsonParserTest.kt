@@ -192,4 +192,60 @@ class KitJsonParserTest {
         val stringified = KitJsonParser.stringify(parsed)
         kotlin.test.assertTrue(stringified.contains("\"image\": \"images/bass.png\""))
     }
+
+    @Test
+    fun testParseKitWithoutRotationDefaultsToZero() {
+        val oldKitJson = """
+            {
+              "formatVersion": 1,
+              "kitId": "old-kit",
+              "name": "Old Kit",
+              "drums": [
+                {
+                  "id": "bass",
+                  "model": "bass",
+                  "center": { "x": 0.25, "y": 0.55 },
+                  "radius": { "rx": 0.30, "ry": 0.30 },
+                  "zones": [
+                    { "id": "bass-1", "region": "main", "sound": null, "gain": 1.0 }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parsed = KitJsonParser.parse(oldKitJson)
+        assertEquals(0.0f, parsed.drums[0].rotation)
+    }
+
+    @Test
+    fun testParseAndRoundTripKitWithRotation() {
+        val kitWithRotationJson = """
+            {
+              "formatVersion": 1,
+              "kitId": "rot-kit",
+              "name": "Rotation Kit",
+              "drums": [
+                {
+                  "id": "sedang",
+                  "model": "split",
+                  "center": { "x": 0.60, "y": 0.60 },
+                  "radius": { "rx": 0.25, "ry": 0.15 },
+                  "rotation": 35.5,
+                  "zones": [
+                    { "id": "sedang-1", "region": "lower", "sound": null, "gain": 1.0 },
+                    { "id": "sedang-2", "region": "upper", "sound": null, "gain": 1.0 }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parsed = KitJsonParser.parse(kitWithRotationJson)
+        assertEquals(35.5f, parsed.drums[0].rotation)
+
+        val stringified = KitJsonParser.stringify(parsed)
+        val reparsed = KitJsonParser.parse(stringified)
+        assertEquals(35.5f, reparsed.drums[0].rotation)
+    }
 }

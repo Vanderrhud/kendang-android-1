@@ -51,6 +51,12 @@ internal class DebugZoneGuideOverlay : ZoneGuideOverlay {
 
             if (rx <= 0f || ry <= 0f) continue
 
+            val needsRotate = drum.rotation != 0f
+            if (needsRotate) {
+                canvas.save()
+                canvas.rotate(drum.rotation, cx, cy)
+            }
+
             val ovalRect = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
             val drumOvalPath = Path().apply {
                 addOval(ovalRect, Path.Direction.CW)
@@ -100,6 +106,10 @@ internal class DebugZoneGuideOverlay : ZoneGuideOverlay {
                         canvas.restore()
                     }
                 }
+            }
+
+            if (needsRotate) {
+                canvas.restore()
             }
         }
     }

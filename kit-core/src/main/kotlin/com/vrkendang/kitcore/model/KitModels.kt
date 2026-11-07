@@ -47,6 +47,7 @@ data class DrumData(
     val center: Point,
     val radius: Radius,
     val divider: DividerData? = null,
+    val rotation: Float = 0f,
     @EncodeDefault val image: String? = null,
     val zones: List<ZoneData>
 )

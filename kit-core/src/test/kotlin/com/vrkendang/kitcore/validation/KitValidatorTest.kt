@@ -376,4 +376,36 @@ class KitValidatorTest {
         val traversalErrors = KitValidator.validate(traversalKit)
         assertTrue(traversalErrors.any { it.contains("tidak boleh mengandung '..'") })
     }
+
+    @Test
+    fun testValidAndInvalidDrumRotation() {
+        val baseKit = createValidKit()
+
+        // Nilai valid: 0.0, 45.0, 360.0
+        val validKit = baseKit.copy(
+            drums = baseKit.drums.mapIndexed { idx, drum ->
+                when (idx) {
+                    0 -> drum.copy(rotation = 0.0f)
+                    1 -> drum.copy(rotation = 45.0f)
+                    else -> drum.copy(rotation = 360.0f)
+                }
+            }
+        )
+        val validErrors = KitValidator.validate(validKit)
+        assertTrue(validErrors.isEmpty(), "Valid rotation should pass: $validErrors")
+
+        // Di bawah 0.0 (< 0)
+        val negativeRotKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(rotation = -1.0f))
+        )
+        val negativeErrors = KitValidator.validate(negativeRotKit)
+        assertTrue(negativeErrors.any { it.contains("Rotasi drum 'bass' harus di rentang 0.0..360.0") })
+
+        // Di atas 360.0 (> 360)
+        val overRotKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(rotation = 360.1f))
+        )
+        val overErrors = KitValidator.validate(overRotKit)
+        assertTrue(overErrors.any { it.contains("Rotasi drum 'bass' harus di rentang 0.0..360.0") })
+    }
 }

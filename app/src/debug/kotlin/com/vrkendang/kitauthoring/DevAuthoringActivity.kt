@@ -943,6 +943,32 @@ class DevAuthoringActivity : Activity() {
         }
         posSizeHeader.addView(posSizeTitle)
 
+        val resetShapeBtn = Button(this).apply {
+            text = "↺ Reset Bentuk"
+            textSize = 9.5f
+            setTextColor(Color.parseColor("#E0D8D0"))
+            isAllCaps = false
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#2B2520"))
+                cornerRadius = 4f * density
+                setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#4A3F37"))
+            }
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT,
+                (22 * density).toInt()
+            ).apply {
+                rightMargin = (6 * density).toInt()
+            }
+            setPadding((6 * density).toInt(), 0, (6 * density).toInt(), 0)
+            setOnClickListener {
+                val updated = session.resetDrumShape(drum.id)
+                previewBoard.kit = updated
+                refreshHeaderStatus()
+                populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+            }
+        }
+        posSizeHeader.addView(resetShapeBtn)
+
         val bringFrontBtn = Button(this).apply {
             text = "▲ Bawa ke Depan"
             textSize = 9.5f
@@ -987,9 +1013,49 @@ class DevAuthoringActivity : Activity() {
             }
         )
 
+        val (initialSize, initialAspect) = DevKitAuthoringSession.toSizeAndAspect(drum.radius.rx, drum.radius.ry)
+
         posSizeBox.addView(
-            buildCompactDividerSlider("Radius/Ukuran", drum.radius.rx, 0.08f, 0.50f) { newR ->
-                val updated = session.updateDrumRadius(drum.id, com.vrkendang.kitcore.model.Radius(newR, newR))
+            buildCompactDividerSlider(
+                label = "Ukuran",
+                initialValue = initialSize,
+                minVal = 0.08f,
+                maxVal = 0.50f,
+                valueFormatter = { String.format("%.2f", it) }
+            ) { newS ->
+                val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                val (_, curAspect) = DevKitAuthoringSession.toSizeAndAspect(curDrum.radius.rx, curDrum.radius.ry)
+                val updated = session.updateDrumShape(drum.id, newS, curAspect)
+                previewBoard.kit = updated
+                refreshHeaderStatus()
+            }
+        )
+
+        posSizeBox.addView(
+            buildCompactDividerSlider(
+                label = "Kelonjongan",
+                initialValue = initialAspect,
+                minVal = -100.0f,
+                maxVal = 100.0f,
+                valueFormatter = { "${it.roundToInt()}%" }
+            ) { newAspect ->
+                val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                val (curSize, _) = DevKitAuthoringSession.toSizeAndAspect(curDrum.radius.rx, curDrum.radius.ry)
+                val updated = session.updateDrumShape(drum.id, curSize, newAspect)
+                previewBoard.kit = updated
+                refreshHeaderStatus()
+            }
+        )
+
+        posSizeBox.addView(
+            buildCompactDividerSlider(
+                label = "Kemiringan",
+                initialValue = drum.rotation,
+                minVal = 0.0f,
+                maxVal = 360.0f,
+                valueFormatter = { "${it.roundToInt()}°" }
+            ) { newRot ->
+                val updated = session.updateDrumRotation(drum.id, newRot)
                 previewBoard.kit = updated
                 refreshHeaderStatus()
             }
@@ -1240,6 +1306,7 @@ class DevAuthoringActivity : Activity() {
         initialValue: Float,
         minVal: Float,
         maxVal: Float,
+        valueFormatter: ((Float) -> String)? = null,
         onValueChanged: (Float) -> Unit
     ): View {
         val density = resources.displayMetrics.density
@@ -1256,13 +1323,15 @@ class DevAuthoringActivity : Activity() {
         }
         row.addView(labelTv)
 
+        val formatVal: (Float) -> String = valueFormatter ?: { String.format("%.2f", it) }
+
         val valueTv = TextView(this).apply {
-            text = String.format("%.2f", initialValue)
+            text = formatVal(initialValue)
             textSize = 10f
             setTextColor(Color.parseColor("#00E5FF"))
             paint.isFakeBoldText = true
             gravity = Gravity.END
-            layoutParams = LinearLayout.LayoutParams((36 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
+            layoutParams = LinearLayout.LayoutParams((40 * density).toInt(), LinearLayout.LayoutParams.WRAP_CONTENT)
         }
 
         val maxSteps = ((maxVal - minVal) * 100f).roundToInt().coerceAtLeast(1)
@@ -1276,7 +1345,7 @@ class DevAuthoringActivity : Activity() {
                 override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
                     if (!fromUser) return
                     val newVal = (minVal + progress / 100f).coerceIn(minVal, maxVal)
-                    valueTv.text = String.format("%.2f", newVal)
+                    valueTv.text = formatVal(newVal)
                     onValueChanged(newVal)
                 }
                 override fun onStartTrackingTouch(sb: SeekBar?) {}
