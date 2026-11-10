@@ -389,10 +389,10 @@ class KendangBoardView @JvmOverloads constructor(
             val needsRotate = drum.rotation != 0f
             val hasSkinBitmap = drumBitmaps.containsKey(drum.id)
             val bodyBitmap = drumBodyBitmaps[drum.id]
+            val body = drum.body
 
             // 2a. Render badan kendang (PNG Body atau badan prosedural 3D)
-            if (bodyBitmap != null && drum.body != null) {
-                val body = drum.body
+            if (bodyBitmap != null && body != null) {
                 canvas.save()
                 if (needsRotate) {
                     canvas.rotate(drum.rotation, cx, cy)
