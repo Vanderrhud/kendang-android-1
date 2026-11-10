@@ -54,6 +54,7 @@ class DevAuthoringActivity : Activity() {
         private const val REQ_IMPORT_PACKAGE = 2002
         private const val REQ_EXPORT_PACKAGE = 2003
         private const val REQ_PICK_PNG = 2004
+        private const val REQ_PICK_BODY_PNG = 2005
     }
 
     private lateinit var session: DevKitAuthoringSession
@@ -62,6 +63,7 @@ class DevAuthoringActivity : Activity() {
     private val kitImageLoader = KitImageLoader()
     private val activeSlotMap = mutableMapOf<String, Int>()
     private var currentDrumBitmaps = mutableMapOf<String, Bitmap>()
+    private var currentDrumBodyBitmaps = mutableMapOf<String, Bitmap>()
 
     private var isTestPlayMode: Boolean = false
     private var selectedDrumId: String = "bass"
@@ -128,18 +130,24 @@ class DevAuthoringActivity : Activity() {
     override fun onDestroy() {
         super.onDestroy()
         kitImageLoader.releaseBitmaps(currentDrumBitmaps)
+        kitImageLoader.releaseBitmaps(currentDrumBodyBitmaps)
         currentDrumBitmaps.clear()
+        currentDrumBodyBitmaps.clear()
     }
 
     private fun reloadDrumImages() {
         kitImageLoader.releaseBitmaps(currentDrumBitmaps)
+        kitImageLoader.releaseBitmaps(currentDrumBodyBitmaps)
         currentDrumBitmaps.clear()
+        currentDrumBodyBitmaps.clear()
         val kit = session.workingKit ?: return
         val imageSource = KitImageSource { relPath ->
             File(session.devKitDir, relPath).inputStream()
         }
         val loaded = kitImageLoader.loadImages(kit, imageSource)
+        val loadedBody = kitImageLoader.loadBodyImages(kit, imageSource)
         currentDrumBitmaps.putAll(loaded)
+        currentDrumBodyBitmaps.putAll(loadedBody)
     }
 
     private fun activateKitAudio(kit: KitData) {
@@ -355,6 +363,7 @@ class DevAuthoringActivity : Activity() {
             fitInsidePanel = true
             this.kit = kit
             this.drumBitmaps = currentDrumBitmaps
+            this.drumBodyBitmaps = currentDrumBodyBitmaps
             this.slotByZoneId = activeSlotMap
             this.selectedDrumId = this@DevAuthoringActivity.selectedDrumId
             this.selectedZoneId = this@DevAuthoringActivity.selectedZoneId
@@ -670,7 +679,7 @@ class DevAuthoringActivity : Activity() {
         }
         rightContainer.addView(headerRow)
 
-        // Bagian Gambar Kendang (PNG)
+        // Bagian Gambar Kendang (PNG Kulit & Body)
         val imageBox = createCompactBox()
         val imageHeader = TextView(this).apply {
             text = "VISUAL KENDANG (PNG):"
@@ -681,40 +690,79 @@ class DevAuthoringActivity : Activity() {
         }
         imageBox.addView(imageHeader)
 
-        val imageStatus = TextView(this).apply {
+        // Status & Tombol PNG Kulit
+        val skinStatus = TextView(this).apply {
             val hasImage = drum.image != null
-            text = if (hasImage) "✓ ${drum.image}" else "Render bawaan Canvas"
+            text = if (hasImage) "✓ Kulit: ${drum.image}" else "Kulit: Render bawaan Canvas"
             textSize = 10.5f
             setTextColor(Color.parseColor(if (hasImage) "#81C784" else "#FFB74D"))
             paint.isFakeBoldText = true
-            setPadding(0, 0, 0, (4 * density).toInt())
+            setPadding(0, 0, 0, (2 * density).toInt())
         }
-        imageBox.addView(imageStatus)
+        imageBox.addView(skinStatus)
 
-        val imageBtnRow = LinearLayout(this).apply {
+        val skinBtnRow = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, 0, 0, (4 * density).toInt())
         }
-
-        val pickPngBtn = createCompactActionButton("Pilih PNG", "#1E88E5", "#42A5F5", 1.2f) {
+        val pickSkinBtn = createCompactActionButton("Pilih PNG Kulit", "#1E88E5", "#42A5F5", 1.2f) {
             launchPngPickerForSelectedDrum()
         }
-        imageBtnRow.addView(pickPngBtn)
+        skinBtnRow.addView(pickSkinBtn)
 
         if (drum.image != null) {
-            val clearPngBtn = createCompactActionButton("Kosongkan", "#2B2520", "#FF8A80", 1.0f) {
+            val clearSkinBtn = createCompactActionButton("Kosongkan Kulit", "#2B2520", "#FF8A80", 1.0f) {
                 val res = session.clearDrumImage(drum.id)
                 if (res is DevImageInstaller.Result.Success) {
                     reloadDrumImages()
                     previewBoard.drumBitmaps = currentDrumBitmaps
+                    previewBoard.drumBodyBitmaps = currentDrumBodyBitmaps
                     refreshHeaderStatus()
                     renderCurrentModeContent()
-                    Toast.makeText(this@DevAuthoringActivity, "✓ Gambar dikosongkan", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(this@DevAuthoringActivity, "✓ Gambar kulit dikosongkan", Toast.LENGTH_SHORT).show()
                 }
             }
-            imageBtnRow.addView(clearPngBtn)
+            skinBtnRow.addView(clearSkinBtn)
         }
-        imageBox.addView(imageBtnRow)
+        imageBox.addView(skinBtnRow)
+
+        // Status & Tombol PNG Body
+        val bodyStatus = TextView(this).apply {
+            val hasBody = drum.body != null
+            text = if (hasBody) "✓ Body: ${drum.body?.image}" else "Body: Tanpa gambar (kosmetik)"
+            textSize = 10.5f
+            setTextColor(Color.parseColor(if (hasBody) "#81C784" else "#A89F96"))
+            paint.isFakeBoldText = true
+            setPadding(0, (2 * density).toInt(), 0, (2 * density).toInt())
+        }
+        imageBox.addView(bodyStatus)
+
+        val bodyBtnRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val pickBodyBtn = createCompactActionButton("Pilih PNG Body", "#00897B", "#4DB6AC", 1.2f) {
+            launchBodyPngPickerForSelectedDrum()
+        }
+        bodyBtnRow.addView(pickBodyBtn)
+
+        if (drum.body != null) {
+            val clearBodyBtn = createCompactActionButton("Kosongkan Body", "#2B2520", "#FF8A80", 1.0f) {
+                val res = session.clearDrumBodyImage(drum.id)
+                if (res is DevImageInstaller.Result.Success) {
+                    reloadDrumImages()
+                    previewBoard.drumBitmaps = currentDrumBitmaps
+                    previewBoard.drumBodyBitmaps = currentDrumBodyBitmaps
+                    refreshHeaderStatus()
+                    renderCurrentModeContent()
+                    Toast.makeText(this@DevAuthoringActivity, "✓ Gambar body dikosongkan", Toast.LENGTH_SHORT).show()
+                }
+            }
+            bodyBtnRow.addView(clearBodyBtn)
+        }
+        imageBox.addView(bodyBtnRow)
+
         rightContainer.addView(imageBox)
 
         // Pemilih Jumlah Zona (Bass: 1..5, Non-Bass: 1..4)
@@ -1062,6 +1110,158 @@ class DevAuthoringActivity : Activity() {
         )
         rightContainer.addView(posSizeBox)
 
+        // Kotak Parameter Body Kendang (Hanya tampil jika kendang memiliki PNG body)
+        if (drum.body != null) {
+            val body = drum.body!!
+            val bodyBox = createCompactBox()
+            val bodyHeader = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, 0, 0, (2 * density).toInt())
+            }
+            val bodyTitle = TextView(this).apply {
+                text = "PARAMETER BODY KENDANG"
+                textSize = 10f
+                setTextColor(Color.parseColor("#80CBC4"))
+                paint.isFakeBoldText = true
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
+            }
+            bodyHeader.addView(bodyTitle)
+
+            val dockBtn = Button(this).apply {
+                text = "⚡ Rapatkan"
+                textSize = 9.5f
+                setTextColor(Color.parseColor("#80CBC4"))
+                isAllCaps = false
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#1C2E2A"))
+                    cornerRadius = 4f * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#00796B"))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (22 * density).toInt()
+                ).apply {
+                    rightMargin = (6 * density).toInt()
+                }
+                setPadding((6 * density).toInt(), 0, (6 * density).toInt(), 0)
+                setOnClickListener {
+                    val updated = session.dockDrumBodyToSkin(drum.id)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                    populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+                }
+            }
+            bodyHeader.addView(dockBtn)
+
+            val resetBodyBtn = Button(this).apply {
+                text = "↺ Reset"
+                textSize = 9.5f
+                setTextColor(Color.parseColor("#E0D8D0"))
+                isAllCaps = false
+                background = GradientDrawable().apply {
+                    setColor(Color.parseColor("#2B2520"))
+                    cornerRadius = 4f * density
+                    setStroke((1 * density).toInt().coerceAtLeast(1), Color.parseColor("#4A3F37"))
+                }
+                layoutParams = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (22 * density).toInt()
+                )
+                setPadding((6 * density).toInt(), 0, (6 * density).toInt(), 0)
+                setOnClickListener {
+                    val updated = session.resetDrumBody(drum.id)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                    populateCompactRightPanel(rightContainer, previewBoard, tabsRow)
+                }
+            }
+            bodyHeader.addView(resetBodyBtn)
+            bodyBox.addView(bodyHeader)
+
+            bodyBox.addView(
+                buildCompactDividerSlider(
+                    label = "Lebar Body",
+                    initialValue = body.width,
+                    minVal = 0.08f,
+                    maxVal = 1.00f,
+                    valueFormatter = { String.format("%.2f", it) }
+                ) { newW ->
+                    val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                    val curBody = curDrum.body ?: return@buildCompactDividerSlider
+                    val updated = session.updateDrumBody(drum.id, newW, curBody.height, curBody.offsetX, curBody.offsetY, curBody.rotation)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                }
+            )
+
+            bodyBox.addView(
+                buildCompactDividerSlider(
+                    label = "Panjang Body",
+                    initialValue = body.height,
+                    minVal = 0.08f,
+                    maxVal = 1.00f,
+                    valueFormatter = { String.format("%.2f", it) }
+                ) { newH ->
+                    val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                    val curBody = curDrum.body ?: return@buildCompactDividerSlider
+                    val updated = session.updateDrumBody(drum.id, curBody.width, newH, curBody.offsetX, curBody.offsetY, curBody.rotation)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                }
+            )
+
+            bodyBox.addView(
+                buildCompactDividerSlider(
+                    label = "Geser X (Offset)",
+                    initialValue = body.offsetX,
+                    minVal = -0.50f,
+                    maxVal = 0.50f,
+                    valueFormatter = { String.format("%+.2f", it) }
+                ) { newOffX ->
+                    val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                    val curBody = curDrum.body ?: return@buildCompactDividerSlider
+                    val updated = session.updateDrumBody(drum.id, curBody.width, curBody.height, newOffX, curBody.offsetY, curBody.rotation)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                }
+            )
+
+            bodyBox.addView(
+                buildCompactDividerSlider(
+                    label = "Geser Y (Offset)",
+                    initialValue = body.offsetY,
+                    minVal = -0.50f,
+                    maxVal = 0.50f,
+                    valueFormatter = { String.format("%+.2f", it) }
+                ) { newOffY ->
+                    val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                    val curBody = curDrum.body ?: return@buildCompactDividerSlider
+                    val updated = session.updateDrumBody(drum.id, curBody.width, curBody.height, curBody.offsetX, newOffY, curBody.rotation)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                }
+            )
+
+            bodyBox.addView(
+                buildCompactDividerSlider(
+                    label = "Kemiringan Body",
+                    initialValue = body.rotation,
+                    minVal = 0.0f,
+                    maxVal = 360.0f,
+                    valueFormatter = { "${it.roundToInt()}°" }
+                ) { newRot ->
+                    val curDrum = session.workingKit?.drums?.firstOrNull { it.id == drum.id } ?: return@buildCompactDividerSlider
+                    val curBody = curDrum.body ?: return@buildCompactDividerSlider
+                    val updated = session.updateDrumBody(drum.id, curBody.width, curBody.height, curBody.offsetX, curBody.offsetY, newRot)
+                    previewBoard.kit = updated
+                    refreshHeaderStatus()
+                }
+            )
+
+            rightContainer.addView(bodyBox)
+        }
+
         // 4. Kotak Parameter Geometri Eksklusif per Zona Terpilih (Khusus Bass)
         if (drum.model == "bass" && drum.zones.size > 1 && drum.divider != null) {
             val divider = drum.divider!!
@@ -1371,6 +1571,7 @@ class DevAuthoringActivity : Activity() {
             fitInsidePanel = false
             this.kit = kit
             this.drumBitmaps = currentDrumBitmaps
+            this.drumBodyBitmaps = currentDrumBodyBitmaps
             this.slotByZoneId = activeSlotMap
         }
     }
@@ -1492,6 +1693,14 @@ class DevAuthoringActivity : Activity() {
             type = "image/png"
         }
         startActivityForResult(intent, REQ_PICK_PNG)
+    }
+
+    private fun launchBodyPngPickerForSelectedDrum() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "image/png"
+        }
+        startActivityForResult(intent, REQ_PICK_BODY_PNG)
     }
 
     private fun promptImportPackage() {
@@ -1624,6 +1833,30 @@ class DevAuthoringActivity : Activity() {
                     is DevImageInstaller.Result.Failure -> {
                         AlertDialog.Builder(this)
                             .setTitle("File PNG Ditolak")
+                            .setMessage(res.message)
+                            .setPositiveButton("OK", null)
+                            .show()
+                    }
+                }
+            }
+
+            REQ_PICK_BODY_PNG -> {
+                val inputStream = runCatching { contentResolver.openInputStream(uri) }.getOrNull() ?: return
+                val res = session.installDrumBodyImage(selectedDrumId, inputStream)
+                when (res) {
+                    is DevImageInstaller.Result.Success -> {
+                        reloadDrumImages()
+                        refreshHeaderStatus()
+                        renderCurrentModeContent()
+                        Toast.makeText(
+                            this,
+                            "✓ Gambar PNG body dipasang ke $selectedDrumId (${res.width}x${res.height})",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                    is DevImageInstaller.Result.Failure -> {
+                        AlertDialog.Builder(this)
+                            .setTitle("File PNG Body Ditolak")
                             .setMessage(res.message)
                             .setPositiveButton("OK", null)
                             .show()

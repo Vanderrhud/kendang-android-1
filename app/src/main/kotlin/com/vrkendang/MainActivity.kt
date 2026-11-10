@@ -54,6 +54,7 @@ class MainActivity : Activity() {
 
     private var activeKitId: String = KitRepository.DEFAULT_KIT_ID
     private var currentDrumBitmaps: Map<String, Bitmap> = emptyMap()
+    private var currentDrumBodyBitmaps: Map<String, Bitmap> = emptyMap()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -197,7 +198,9 @@ class MainActivity : Activity() {
     override fun onDestroy() {
         super.onDestroy()
         kitImageLoader.releaseBitmaps(currentDrumBitmaps)
+        kitImageLoader.releaseBitmaps(currentDrumBodyBitmaps)
         currentDrumBitmaps = emptyMap()
+        currentDrumBodyBitmaps = emptyMap()
         runCatching { AudioEngine.closeStream() }
             .onFailure { Log.e(TAG, "Gagal menutup stream audio", it) }
     }
@@ -267,14 +270,18 @@ class MainActivity : Activity() {
         boardView.kit = kit
         boardView.slotByZoneId = activation.slotByZoneId
 
-        // Muat gambar PNG kendang (Task 3.2)
+        // Muat gambar PNG kendang (kulit & body)
         kitImageLoader.releaseBitmaps(currentDrumBitmaps)
+        kitImageLoader.releaseBitmaps(currentDrumBodyBitmaps)
         val imageSource = KitImageSource { path ->
             kitRepository.openImageStream(kit.kitId, path)
         }
         val loadedBitmaps = kitImageLoader.loadImages(kit, imageSource)
+        val loadedBodyBitmaps = kitImageLoader.loadBodyImages(kit, imageSource)
         currentDrumBitmaps = loadedBitmaps
+        currentDrumBodyBitmaps = loadedBodyBitmaps
         boardView.drumBitmaps = loadedBitmaps
+        boardView.drumBodyBitmaps = loadedBodyBitmaps
 
         headerView.setActiveKitName(kit.name)
     }

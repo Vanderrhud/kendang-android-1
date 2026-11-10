@@ -526,4 +526,129 @@ class DevKitAuthoringSessionTest {
             tempDir.deleteRecursively()
         }
     }
+
+    private fun buildMinimalPng(): ByteArray {
+        val baos = ByteArrayOutputStream()
+        baos.write(byteArrayOf(
+            0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte(),
+            0x0D.toByte(), 0x0A.toByte(), 0x1A.toByte(), 0x0A.toByte()
+        ))
+        val dos = java.io.DataOutputStream(baos)
+        dos.writeInt(13)
+        dos.write("IHDR".toByteArray(Charsets.US_ASCII))
+        dos.writeInt(100)
+        dos.writeInt(100)
+        dos.writeByte(8)
+        dos.writeByte(6)
+        dos.writeByte(0)
+        dos.writeByte(0)
+        dos.writeByte(0)
+        dos.writeInt(0)
+        dos.flush()
+        return baos.toByteArray()
+    }
+
+    @Test
+    fun testInstallAndClearDrumBodyImage() {
+        val tempDir = File.createTempFile("dev-session-body-install", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-body-install", "Test Body Install", null)
+
+            val pngBytes = buildMinimalPng()
+            val installRes = session.installDrumBodyImage("sedang", ByteArrayInputStream(pngBytes))
+            assertTrue(installRes is DevImageInstaller.Result.Success)
+
+            val drumWithBody = session.workingKit!!.drums.first { it.id == "sedang" }
+            assertNotNull(drumWithBody.body)
+            assertEquals("images/sedang-body.png", drumWithBody.body!!.image)
+            assertTrue(File(tempDir, "images/sedang-body.png").exists())
+
+            // Kosongkan body
+            val clearRes = session.clearDrumBodyImage("sedang")
+            assertTrue(clearRes is DevImageInstaller.Result.Success)
+
+            val drumCleared = session.workingKit!!.drums.first { it.id == "sedang" }
+            kotlin.test.assertNull(drumCleared.body)
+            assertFalse(File(tempDir, "images/sedang-body.png").exists())
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun testUpdateDockAndResetDrumBody() {
+        val tempDir = File.createTempFile("dev-session-body-update", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-body-update", "Test Body Update", null)
+
+            val pngBytes = buildMinimalPng()
+            session.installDrumBodyImage("sedang", ByteArrayInputStream(pngBytes))
+
+            // 1. Update parameter geometri body
+            val updated = session.updateDrumBody(
+                drumId = "sedang",
+                width = 0.40f,
+                height = 0.35f,
+                offsetX = 0.05f,
+                offsetY = 0.18f,
+                rotation = 25.0f
+            )
+            val body = updated.drums.first { it.id == "sedang" }.body!!
+            assertEquals(0.40f, body.width, 0.001f)
+            assertEquals(0.35f, body.height, 0.001f)
+            assertEquals(0.05f, body.offsetX, 0.001f)
+            assertEquals(0.18f, body.offsetY, 0.001f)
+            assertEquals(25.0f, body.rotation, 0.001f)
+
+            // 2. Dock ke kulit (Auto-Dock)
+            val drum = updated.drums.first { it.id == "sedang" }
+            val docked = session.dockDrumBodyToSkin("sedang")
+            val dockedBody = docked.drums.first { it.id == "sedang" }.body!!
+            assertEquals(drum.radius.rx * 2f, dockedBody.width, 0.001f)
+            assertEquals(0.0f, dockedBody.offsetX, 0.001f)
+            assertEquals(dockedBody.height / 2f, dockedBody.offsetY, 0.001f)
+            assertEquals(0.0f, dockedBody.rotation, 0.001f)
+
+            // 3. Reset body
+            val reset = session.resetDrumBody("sedang")
+            val resetBody = reset.drums.first { it.id == "sedang" }.body!!
+            val stdSize = drum.radius.rx * 2f
+            assertEquals(stdSize, resetBody.width, 0.001f)
+            assertEquals(stdSize, resetBody.height, 0.001f)
+            assertEquals(0.0f, resetBody.offsetX, 0.001f)
+            assertEquals(stdSize / 2f, resetBody.offsetY, 0.001f)
+            assertEquals(0.0f, resetBody.rotation, 0.001f)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun testRenameAndDeleteDrumWithBody() {
+        val tempDir = File.createTempFile("dev-session-body-rename-del", "").apply { delete(); mkdirs() }
+        try {
+            val session = DevKitAuthoringSession(tempDir)
+            session.createNewKit("test-rename-del", "Test Rename Del", null)
+
+            val pngBytes = buildMinimalPng()
+            session.installDrumBodyImage("sedang", ByteArrayInputStream(pngBytes))
+            assertTrue(File(tempDir, "images/sedang-body.png").exists())
+
+            // Rename drum
+            session.renameDrumId("sedang", "sedang-baru")
+            val renamedDrum = session.workingKit!!.drums.first { it.id == "sedang-baru" }
+            assertEquals("images/sedang-baru-body.png", renamedDrum.body!!.image)
+            assertTrue(File(tempDir, "images/sedang-baru-body.png").exists())
+            assertFalse(File(tempDir, "images/sedang-body.png").exists())
+
+            // Delete drum
+            session.deleteDrum("sedang-baru")
+            assertFalse(session.workingKit!!.drums.any { it.id == "sedang-baru" })
+            assertFalse(File(tempDir, "images/sedang-baru-body.png").exists())
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

@@ -133,6 +133,16 @@ class KendangBoardView @JvmOverloads constructor(
             invalidate()
         }
 
+    /**
+     * Pemetaan ID kendang (`drum.id`) ke [Bitmap] gambar badan/tabung kendang (body).
+     * Diberikan oleh [com.vrkendang.image.KitImageLoader] saat aktivasi kit.
+     */
+    var drumBodyBitmaps: Map<String, Bitmap> = emptyMap()
+        set(value) {
+            field = value
+            invalidate()
+        }
+
     /** JNI API bridge ke mesin audio C++ Oboe (dapat disuntikkan fake saat test). */
     var audioEngine: AudioEngineApi = AudioEngineApiImpl
 
@@ -368,51 +378,66 @@ class KendangBoardView @JvmOverloads constructor(
 
         val now = SystemClock.uptimeMillis()
 
-        // 2. Render badan kendang 3D terlebih dahulu (HANYA untuk kendang tanpa gambar PNG, urut dari belakang ke depan)
-        for (drum in currentKit.drums.asReversed()) {
-            if (drumBitmaps.containsKey(drum.id)) continue
-            val cx = mapper.toPixelX(drum.center.x)
-            val cy = mapper.toPixelY(drum.center.y)
-            val rx = mapper.toPixelRadiusX(drum.radius.rx)
-            val ry = mapper.toPixelRadiusY(drum.radius.ry)
-            if (rx <= 0f || ry <= 0f) continue
-            val needsRotate = drum.rotation != 0f
-            if (needsRotate) {
-                canvas.save()
-                canvas.rotate(drum.rotation, cx, cy)
-            }
-            drawDrumBody3D(canvas, cx, cy, rx, ry)
-            if (needsRotate) {
-                canvas.restore()
-            }
-        }
-
-        // 3. Render seluruh kulit kendang (sesuai urutan z-order: indeks 0 di atas, render dari belakang ke depan)
+        // 2. Render kendang dari belakang ke depan (Z-Order: body terlebih dahulu, lalu kulit di atasnya)
         for (drum in currentKit.drums.asReversed()) {
             val cx = mapper.toPixelX(drum.center.x)
             val cy = mapper.toPixelY(drum.center.y)
             val baseRx = mapper.toPixelRadiusX(drum.radius.rx)
             val baseRy = mapper.toPixelRadiusY(drum.radius.ry)
-
             if (baseRx <= 0f || baseRy <= 0f) continue
 
+            val needsRotate = drum.rotation != 0f
+            val hasSkinBitmap = drumBitmaps.containsKey(drum.id)
+            val bodyBitmap = drumBodyBitmaps[drum.id]
+
+            // 2a. Render badan kendang (PNG Body atau badan prosedural 3D)
+            if (bodyBitmap != null && drum.body != null) {
+                val body = drum.body
+                canvas.save()
+                if (needsRotate) {
+                    canvas.rotate(drum.rotation, cx, cy)
+                }
+                // Pusat lokal body relatif terhadap titik tengah kendang induk
+                val bodyCx = cx + mapper.toPixelRadiusX(body.offsetX)
+                val bodyCy = cy + mapper.toPixelRadiusY(body.offsetY)
+                val halfW = mapper.toPixelRadiusX(body.width / 2f)
+                val halfH = mapper.toPixelRadiusY(body.height / 2f)
+
+                if (body.rotation != 0f) {
+                    canvas.rotate(body.rotation, bodyCx, bodyCy)
+                }
+                val bodyRect = RectF(bodyCx - halfW, bodyCy - halfH, bodyCx + halfW, bodyCy + halfH)
+                canvas.drawBitmap(bodyBitmap, null, bodyRect, drumBitmapPaint)
+                canvas.restore()
+            } else if (!hasSkinBitmap) {
+                // Badan 3D prosedural bawaan hanya digambar bila tidak ada PNG kulit dan tidak ada PNG body
+                if (needsRotate) {
+                    canvas.save()
+                    canvas.rotate(drum.rotation, cx, cy)
+                }
+                drawDrumBody3D(canvas, cx, cy, baseRx, baseRy)
+                if (needsRotate) {
+                    canvas.restore()
+                }
+            }
+
+            // 2b. Render kulit kendang (di atas body miliknya sendiri)
             // Efek denyut kulit kendang saat baru dipukul (~100 ms)
             val pulseScale = computeDrumPulseScale(drum.id, now)
             val rx = baseRx * pulseScale
             val ry = baseRy * pulseScale
 
             val ovalRect = RectF(cx - rx, cy - ry, cx + rx, cy + ry)
-            val bitmap = drumBitmaps[drum.id]
+            val skinBitmap = drumBitmaps[drum.id]
 
-            val needsRotate = drum.rotation != 0f
             if (needsRotate) {
                 canvas.save()
                 canvas.rotate(drum.rotation, cx, cy)
             }
 
-            if (bitmap != null) {
+            if (skinBitmap != null) {
                 // Render gambar PNG kendang (kulit dan rim sudah menyatu di dalam file PNG)
-                canvas.drawBitmap(bitmap, null, ovalRect, drumBitmapPaint)
+                canvas.drawBitmap(skinBitmap, null, ovalRect, drumBitmapPaint)
             } else {
                 // Kulit kendang alami tanpa tempelan plak kosmetik
                 canvas.drawOval(ovalRect, drumSkinPaint)

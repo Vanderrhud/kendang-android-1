@@ -67,7 +67,7 @@ object KitPackageReader {
         val kitData = KitJsonParser.parse(jsonString)
         KitValidator.validateOrThrow(kitData)
 
-        // Validasi keberadaan dan format file PNG yang dirujuk kit.json
+        // Validasi keberadaan dan format file PNG yang dirujuk kit.json (kulit dan body)
         for (drum in kitData.drums) {
             if (drum.image != null) {
                 val imgBytes = imageMap[drum.image]
@@ -76,6 +76,16 @@ object KitPackageReader {
                     PngValidator.validate(imgBytes)
                 } catch (e: Exception) {
                     throw IllegalArgumentException("File gambar '${drum.image}' bukan format PNG valid: ${e.message}", e)
+                }
+            }
+            if (drum.body?.image != null) {
+                val bodyImgPath = drum.body.image
+                val imgBytes = imageMap[bodyImgPath]
+                    ?: throw IllegalArgumentException("File gambar body yang dirujuk tidak ditemukan di paket: '$bodyImgPath'")
+                try {
+                    PngValidator.validate(imgBytes)
+                } catch (e: Exception) {
+                    throw IllegalArgumentException("File gambar body '$bodyImgPath' bukan format PNG valid: ${e.message}", e)
                 }
             }
         }

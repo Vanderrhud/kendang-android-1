@@ -90,6 +90,35 @@ class KitImageLoader(
     }
 
     /**
+     * Memuat seluruh gambar PNG body kendang untuk drum yang memiliki `body?.image != null` dalam [kit].
+     * Mengembalikan pemetaan `drum.id` -> [Bitmap].
+     */
+    fun loadBodyImages(
+        kit: KitData,
+        imageSource: KitImageSource
+    ): Map<String, Bitmap> {
+        val loadedMap = linkedMapOf<String, Bitmap>()
+
+        for (drum in kit.drums) {
+            val bodyImagePath = drum.body?.image ?: continue
+            try {
+                imageSource.open(bodyImagePath).use { stream ->
+                    val bitmap = bitmapDecoder(stream)
+                    if (bitmap != null) {
+                        loadedMap[drum.id] = bitmap
+                    } else {
+                        logSink("Gagal mendekode gambar body untuk drum '${drum.id}' pada path '$bodyImagePath'")
+                    }
+                }
+            } catch (e: Exception) {
+                logSink("Gagal membaca gambar body untuk drum '${drum.id}' pada path '$bodyImagePath': ${e.message}")
+            }
+        }
+
+        return loadedMap
+    }
+
+    /**
      * Membebaskan seluruh bitmap lama saat kit dinonaktifkan atau diganti.
      */
     fun releaseBitmaps(bitmaps: Map<String, Bitmap>) {

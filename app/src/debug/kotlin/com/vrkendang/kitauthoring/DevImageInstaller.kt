@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.vrkendang.image.KitImageLoader
 import com.vrkendang.kitcore.image.PngValidator
+import com.vrkendang.kitcore.model.DrumBodyData
 import com.vrkendang.kitcore.model.KitData
 import com.vrkendang.kitcore.packageio.KitPackageReader
 import com.vrkendang.kitcore.parser.KitJsonParser
@@ -166,6 +167,173 @@ class DevImageInstaller(
 
         val updatedDrums = currentKit.drums.map { drum ->
             if (drum.id == drumId) drum.copy(image = null) else drum
+        }
+        val updatedKit = currentKit.copy(drums = updatedDrums)
+
+        try {
+            val jsonString = json.encodeToString(KitData.serializer(), updatedKit)
+            val tmpJsonFile = File(devKitDir, "kit.json.tmp")
+            tmpJsonFile.writeText(jsonString)
+            if (!tmpJsonFile.renameTo(kitJsonFile)) {
+                kitJsonFile.writeText(jsonString)
+                tmpJsonFile.delete()
+            }
+        } catch (e: Throwable) {
+            return Result.Failure("Gagal memperbarui kit.json: ${e.message}")
+        }
+
+        return Result.Success(
+            drumId = drumId,
+            width = 0,
+            height = 0,
+            updatedKit = updatedKit
+        )
+    }
+
+    /**
+     * Memasang file PNG body kendang dari [inputStream] ke kendang [drumId].
+     * Disimpan sebagai `filesDir/dev-kit/images/<drumId>-body.png`.
+     */
+    fun installBodyPng(
+        drumId: String,
+        inputStream: InputStream,
+        devKitDir: File
+    ): Result {
+        val bytes = try {
+            inputStream.readBytes()
+        } catch (e: Exception) {
+            return Result.Failure("Gagal membaca file gambar body: ${e.message}")
+        }
+
+        // 1. Validasi batas ukuran file (maksimum 2 MB)
+        if (bytes.size > KitPackageReader.MAX_PNG_SIZE) {
+            val sizeMb = bytes.size / (1024 * 1024.0)
+            return Result.Failure("Ukuran file body melebihi batas 2 MB (terdeteksi: ${String.format("%.1f", sizeMb)} MB)")
+        }
+
+        // 2. Validasi format PNG via PngValidator
+        val pngHeader = try {
+            PngValidator.validate(bytes)
+        } catch (e: Exception) {
+            return Result.Failure("Format harus file PNG yang valid (${e.message})")
+        }
+
+        // 3. Validasi gambar wajib persegi (1:1)
+        if (!pngHeader.isSquare) {
+            return Result.Failure("Gambar body harus berbentuk persegi (rasio 1:1, lebar dan tinggi sama; terdeteksi: ${pngHeader.width}x${pngHeader.height})")
+        }
+
+        // 4. Downsample gambar jika perlu (max 1024 px) dan encode ke PNG bytes
+        val finalPngBytes = try {
+            if (pngHeader.width <= KitImageLoader.MAX_IMAGE_DIMENSION && pngHeader.height <= KitImageLoader.MAX_IMAGE_DIMENSION) {
+                bytes
+            } else {
+                downsampleToPngBytes(bytes, KitImageLoader.MAX_IMAGE_DIMENSION)
+            }
+        } catch (e: Exception) {
+            return Result.Failure("Gagal memproses gambar body: ${e.message}")
+        }
+
+        // 5. Pastikan direktori kerja dan images/ tersedia
+        val imagesDir = File(devKitDir, "images")
+        if (!imagesDir.exists() && !imagesDir.mkdirs()) {
+            return Result.Failure("Gagal membuat direktori '${imagesDir.path}'")
+        }
+
+        val targetPngFile = File(imagesDir, "$drumId-body.png")
+        val tmpPngFile = File(imagesDir, "$drumId-body.png.tmp")
+        try {
+            tmpPngFile.writeBytes(finalPngBytes)
+            if (!tmpPngFile.renameTo(targetPngFile)) {
+                targetPngFile.writeBytes(finalPngBytes)
+                tmpPngFile.delete()
+            }
+        } catch (e: Exception) {
+            return Result.Failure("Gagal menyimpan file gambar body: ${e.message}")
+        }
+
+        // 6. Perbarui kit.json di salinan kerja
+        val kitJsonFile = File(devKitDir, "kit.json")
+        val currentKit = try {
+            if (kitJsonFile.exists()) {
+                KitJsonParser.parse(kitJsonFile.readText())
+            } else {
+                return Result.Failure("Berkas 'kit.json' tidak ditemukan di ${devKitDir.path}")
+            }
+        } catch (e: Exception) {
+            return Result.Failure("Gagal membaca kit.json: ${e.message}")
+        }
+
+        val relativeBodyPath = "images/$drumId-body.png"
+        val updatedDrums = currentKit.drums.map { drum ->
+            if (drum.id == drumId) {
+                val existingBody = drum.body
+                val newBody = if (existingBody != null) {
+                    existingBody.copy(image = relativeBodyPath)
+                } else {
+                    // Inisialisasi awal: rapat ke kulit (width = 2 * rx, height = 2 * rx, offsetY = height / 2)
+                    val w = (drum.radius.rx * 2f).coerceIn(0.08f, 1.00f)
+                    val h = w
+                    DrumBodyData(
+                        image = relativeBodyPath,
+                        width = w,
+                        height = h,
+                        offsetX = 0f,
+                        offsetY = h / 2f,
+                        rotation = 0f
+                    )
+                }
+                drum.copy(body = newBody)
+            } else drum
+        }
+        val updatedKit = currentKit.copy(drums = updatedDrums)
+
+        try {
+            val jsonString = json.encodeToString(KitData.serializer(), updatedKit)
+            val tmpJsonFile = File(devKitDir, "kit.json.tmp")
+            tmpJsonFile.writeText(jsonString)
+            if (!tmpJsonFile.renameTo(kitJsonFile)) {
+                kitJsonFile.writeText(jsonString)
+                tmpJsonFile.delete()
+            }
+        } catch (e: Throwable) {
+            return Result.Failure("Gagal memperbarui kit.json: ${e.message}")
+        }
+
+        return Result.Success(
+            drumId = drumId,
+            width = minOf(pngHeader.width, KitImageLoader.MAX_IMAGE_DIMENSION),
+            height = minOf(pngHeader.height, KitImageLoader.MAX_IMAGE_DIMENSION),
+            updatedKit = updatedKit
+        )
+    }
+
+    /**
+     * Mengosongkan gambar body kendang (body = null) dan menghapus file PNG-nya.
+     */
+    fun clearBodyImage(
+        drumId: String,
+        devKitDir: File
+    ): Result {
+        val kitJsonFile = File(devKitDir, "kit.json")
+        val currentKit = try {
+            if (kitJsonFile.exists()) {
+                KitJsonParser.parse(kitJsonFile.readText())
+            } else {
+                return Result.Failure("Berkas 'kit.json' tidak ditemukan di ${devKitDir.path}")
+            }
+        } catch (e: Exception) {
+            return Result.Failure("Gagal membaca kit.json: ${e.message}")
+        }
+
+        // Hapus file gambar body jika ada
+        val imageFile = File(File(devKitDir, "images"), "$drumId-body.png")
+        if (imageFile.exists()) {
+            imageFile.delete()
+        }
+
+        val updatedDrums = currentKit.drums.map { drum ->
+            if (drum.id == drumId) drum.copy(body = null) else drum
         }
         val updatedKit = currentKit.copy(drums = updatedDrums)
 

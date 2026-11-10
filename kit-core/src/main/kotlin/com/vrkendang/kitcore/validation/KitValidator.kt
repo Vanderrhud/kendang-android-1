@@ -147,7 +147,32 @@ object KitValidator {
                 }
             }
 
-            // 5. Validasi Zona: Gain dan Sound path
+            // 5. Validasi Body drum
+            if (drum.body != null) {
+                val body = drum.body
+                val bodyImg = body.image
+                if (bodyImg.startsWith("/") || bodyImg.startsWith("\\") || (bodyImg.length >= 2 && bodyImg[1] == ':')) {
+                    errors.add("Path body image drum '${drum.id}' tidak boleh absolut: '$bodyImg'")
+                }
+                if (bodyImg.contains("..")) {
+                    errors.add("Path body image drum '${drum.id}' tidak boleh mengandung '..': '$bodyImg'")
+                }
+                val expectedBodyPath = "images/${drum.id}-body.png"
+                if (bodyImg != expectedBodyPath) {
+                    errors.add("Path body image drum '${drum.id}' harus persis '$expectedBodyPath' (ditemukan: '$bodyImg')")
+                }
+                if (body.width <= 0.0f || body.width > 5.0f || body.height <= 0.0f || body.height > 5.0f) {
+                    errors.add("Dimensi body width dan height drum '${drum.id}' harus > 0.0 dan <= 5.0 (ditemukan: width=${body.width}, height=${body.height})")
+                }
+                if (body.offsetX !in -3.0f..3.0f || body.offsetY !in -3.0f..3.0f) {
+                    errors.add("Offset body offsetX dan offsetY drum '${drum.id}' harus di rentang -3.0..3.0 (ditemukan: offsetX=${body.offsetX}, offsetY=${body.offsetY})")
+                }
+                if (body.rotation !in 0.0f..360.0f) {
+                    errors.add("Rotasi body drum '${drum.id}' harus di rentang 0.0..360.0 (ditemukan: ${body.rotation})")
+                }
+            }
+
+            // 6. Validasi Zona: Gain dan Sound path
             for (zone in drum.zones) {
                 if (zone.gain !in 0.0f..2.0f) {
                     errors.add("Nilai gain zona '${zone.id}' harus di rentang 0.0..2.0 (ditemukan: ${zone.gain})")

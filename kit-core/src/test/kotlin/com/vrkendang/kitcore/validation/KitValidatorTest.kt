@@ -408,4 +408,64 @@ class KitValidatorTest {
         val overErrors = KitValidator.validate(overRotKit)
         assertTrue(overErrors.any { it.contains("Rotasi drum 'bass' harus di rentang 0.0..360.0") })
     }
+
+    @Test
+    fun testValidAndInvalidDrumBody() {
+        val baseKit = createValidKit()
+
+        // 1. Konfigurasi body valid
+        val validBody = com.vrkendang.kitcore.model.DrumBodyData(
+            image = "images/bass-body.png",
+            width = 0.50f,
+            height = 0.40f,
+            offsetX = 0.0f,
+            offsetY = 0.20f,
+            rotation = 15.0f
+        )
+        val validKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(body = validBody))
+        )
+        assertTrue(KitValidator.validate(validKit).isEmpty(), "Valid body harus lolos validasi")
+
+        // 2. Path tidak sesuai konvensi
+        val badPathKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(body = validBody.copy(image = "images/bass.png")))
+        )
+        val badPathErrors = KitValidator.validate(badPathKit)
+        assertTrue(badPathErrors.any { it.contains("harus persis 'images/bass-body.png'") })
+
+        // 3. Path absolut & traversal
+        val absKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(body = validBody.copy(image = "/images/bass-body.png")))
+        )
+        assertTrue(KitValidator.validate(absKit).any { it.contains("tidak boleh absolut") })
+
+        val travKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(body = validBody.copy(image = "images/../bass-body.png")))
+        )
+        assertTrue(KitValidator.validate(travKit).any { it.contains("tidak boleh mengandung '..'") })
+
+        // 4. Dimensi <= 0 atau > 5.0
+        val zeroWidthKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(body = validBody.copy(width = 0.0f)))
+        )
+        assertTrue(KitValidator.validate(zeroWidthKit).any { it.contains("width dan height") })
+
+        val hugeHeightKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(body = validBody.copy(height = 5.1f)))
+        )
+        assertTrue(KitValidator.validate(hugeHeightKit).any { it.contains("width dan height") })
+
+        // 5. Offset di luar -3.0..3.0
+        val badOffsetKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(body = validBody.copy(offsetX = -3.5f)))
+        )
+        assertTrue(KitValidator.validate(badOffsetKit).any { it.contains("offsetX dan offsetY") })
+
+        // 6. Rotasi body di luar 0.0..360.0
+        val badRotKit = baseKit.copy(
+            drums = listOf(baseKit.drums[0].copy(body = validBody.copy(rotation = 360.5f)))
+        )
+        assertTrue(KitValidator.validate(badRotKit).any { it.contains("Rotasi body drum 'bass'") })
+    }
 }

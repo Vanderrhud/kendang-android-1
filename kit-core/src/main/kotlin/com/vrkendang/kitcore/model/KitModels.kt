@@ -39,6 +39,25 @@ data class ZoneData(
     val gain: Float = 1.0f
 )
 
+/**
+ * Konfigurasi gambar dan geometri badan/tabung kayu kendang (body) 2.5D.
+ *
+ * Menggunakan sistem hierarkis parent-child terhadap titik pusat dan rotasi kendang induk:
+ * - [image]: Path relatif file PNG persegi 1:1 ('images/<drumId>-body.png').
+ * - [width] & [height]: Dimensi bounding box gambar body di kanvas.
+ * - [offsetX] & [offsetY]: Pergeseran titik tengah gambar body relatif terhadap center kendang.
+ * - [rotation]: Sudut kemiringan tambahan body relatif terhadap sudut rotasi kendang.
+ */
+@Serializable
+data class DrumBodyData(
+    val image: String,
+    val width: Float,
+    val height: Float,
+    val offsetX: Float = 0f,
+    val offsetY: Float = 0f,
+    val rotation: Float = 0f
+)
+
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class DrumData(
@@ -49,6 +68,7 @@ data class DrumData(
     val divider: DividerData? = null,
     val rotation: Float = 0f,
     @EncodeDefault val image: String? = null,
+    @EncodeDefault val body: DrumBodyData? = null,
     val zones: List<ZoneData>
 )
 

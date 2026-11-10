@@ -7,6 +7,7 @@ import com.vrkendang.audio.AudioEngineApi
 import com.vrkendang.audio.AudioEngineApiImpl
 import com.vrkendang.kitcore.factory.KitFactory
 import com.vrkendang.kitcore.model.DividerData
+import com.vrkendang.kitcore.model.DrumBodyData
 import com.vrkendang.kitcore.model.KitData
 import com.vrkendang.kitcore.model.Point
 import com.vrkendang.kitcore.model.Radius
@@ -323,7 +324,7 @@ class DevKitAuthoringSession(
 
         // Bersihkan PNG yatim di folder tujuan yang tidak lagi dirujuk oleh kit.json
         val referencedImageFileNames = kit.drums
-            .mapNotNull { it.image?.substringAfterLast('/') }
+            .flatMap { listOfNotNull(it.image?.substringAfterLast('/'), it.body?.image?.substringAfterLast('/')) }
             .toSet()
 
         targetImagesDir.listFiles()?.forEach { existing ->
@@ -334,12 +335,13 @@ class DevKitAuthoringSession(
 
         // Salin PNG yang dirujuk dari devKitDir ke filesDir/kits/<kitId>/images/
         for (drum in kit.drums) {
-            val relPath = drum.image ?: continue
-            val srcFile = File(devKitDir, relPath)
-            val dstFile = File(targetDir, relPath)
-            if (srcFile.isFile) {
-                dstFile.parentFile?.mkdirs()
-                srcFile.copyTo(dstFile, overwrite = true)
+            listOfNotNull(drum.image, drum.body?.image).forEach { relPath ->
+                val srcFile = File(devKitDir, relPath)
+                val dstFile = File(targetDir, relPath)
+                if (srcFile.isFile) {
+                    dstFile.parentFile?.mkdirs()
+                    srcFile.copyTo(dstFile, overwrite = true)
+                }
             }
         }
 
@@ -861,6 +863,10 @@ class DevKitAuthoringSession(
         if (imageFile.exists()) {
             imageFile.delete()
         }
+        val bodyImageFile = File(imagesDir, "$drumId-body.png")
+        if (bodyImageFile.exists()) {
+            bodyImageFile.delete()
+        }
 
         val updatedDrums = kit.drums.filter { it.id != drumId }
         val updated = kit.copy(drums = updatedDrums)
@@ -966,10 +972,130 @@ class DevKitAuthoringSession(
             oldImageFile.renameTo(newImageFile)
         }
 
+        // Pindahkan file gambar body jika ada
+        val oldBodyFile = File(imagesDir, "$oldDrumId-body.png")
+        val newBody = target.body?.let { b ->
+            if (oldBodyFile.exists()) {
+                val newBodyFile = File(imagesDir, "$newDrumId-body.png")
+                oldBodyFile.renameTo(newBodyFile)
+            }
+            b.copy(image = "images/$newDrumId-body.png")
+        }
+
         val updatedDrums = kit.drums.map { drum ->
             if (drum.id == oldDrumId) {
-                drum.copy(id = newDrumId, image = newImagePath)
+                drum.copy(id = newDrumId, image = newImagePath, body = newBody)
             } else drum
+        }
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Memasang gambar PNG body untuk kendang.
+     */
+    fun installDrumBodyImage(drumId: String, inputStream: InputStream): DevImageInstaller.Result {
+        val result = devImageInstaller.installBodyPng(drumId, inputStream, devKitDir)
+        if (result is DevImageInstaller.Result.Success) {
+            workingKit = result.updatedKit
+            hasUnsavedChanges = true
+        }
+        return result
+    }
+
+    /**
+     * Mengosongkan gambar PNG body kendang.
+     */
+    fun clearDrumBodyImage(drumId: String): DevImageInstaller.Result {
+        val result = devImageInstaller.clearBodyImage(drumId, devKitDir)
+        if (result is DevImageInstaller.Result.Success) {
+            workingKit = result.updatedKit
+            hasUnsavedChanges = true
+        }
+        return result
+    }
+
+    /**
+     * Memperbarui parameter geometri body kendang.
+     */
+    fun updateDrumBody(
+        drumId: String,
+        width: Float,
+        height: Float,
+        offsetX: Float,
+        offsetY: Float,
+        rotation: Float
+    ): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val target = kit.drums.firstOrNull { it.id == drumId } ?: return kit
+        val existingBody = target.body ?: return kit
+
+        val updatedBody = existingBody.copy(
+            width = width.coerceIn(0.01f, 5.0f),
+            height = height.coerceIn(0.01f, 5.0f),
+            offsetX = offsetX.coerceIn(-3.0f, 3.0f),
+            offsetY = offsetY.coerceIn(-3.0f, 3.0f),
+            rotation = rotation.coerceIn(0.0f, 360.0f)
+        )
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.id == drumId) drum.copy(body = updatedBody) else drum
+        }
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Menyelaraskan body tepat di bawah cincin kulit kendang (Auto-Dock).
+     * Lebar body diselaraskan dengan diameter horizontal kulit (2 * rx), offset X = 0, offset Y = height / 2, rotasi = 0.
+     */
+    fun dockDrumBodyToSkin(drumId: String): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val target = kit.drums.firstOrNull { it.id == drumId } ?: return kit
+        val existingBody = target.body ?: return kit
+
+        val newW = (target.radius.rx * 2f).coerceIn(0.08f, 1.00f)
+        val newH = existingBody.height.coerceIn(0.08f, 1.00f)
+        val updatedBody = existingBody.copy(
+            width = newW,
+            height = newH,
+            offsetX = 0f,
+            offsetY = newH / 2f,
+            rotation = 0f
+        )
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.id == drumId) drum.copy(body = updatedBody) else drum
+        }
+        val updated = kit.copy(drums = updatedDrums)
+        writeKitJsonToDisk(updated)
+        workingKit = updated
+        hasUnsavedChanges = true
+        return updated
+    }
+
+    /**
+     * Mengembalikan parameter body ke nilai awal standar yang rapat ke kulit.
+     */
+    fun resetDrumBody(drumId: String): KitData {
+        val kit = workingKit ?: throw IllegalStateException("Kit belum dimuat")
+        val target = kit.drums.firstOrNull { it.id == drumId } ?: return kit
+        val existingBody = target.body ?: return kit
+
+        val stdSize = (target.radius.rx * 2f).coerceIn(0.08f, 1.00f)
+        val updatedBody = existingBody.copy(
+            width = stdSize,
+            height = stdSize,
+            offsetX = 0f,
+            offsetY = stdSize / 2f,
+            rotation = 0f
+        )
+        val updatedDrums = kit.drums.map { drum ->
+            if (drum.id == drumId) drum.copy(body = updatedBody) else drum
         }
         val updated = kit.copy(drums = updatedDrums)
         writeKitJsonToDisk(updated)

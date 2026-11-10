@@ -67,11 +67,14 @@ object KitPackageWriter {
                 zos.closeEntry()
             }
 
-            // 4. Kumpulkan path PNG gambar kendang yang dirujuk secara unik
+            // 4. Kumpulkan path PNG gambar kendang yang dirujuk secara unik (kulit dan body)
             val referencedImagePaths = mutableSetOf<String>()
             for (drum in kit.drums) {
                 if (drum.image != null) {
                     referencedImagePaths.add(drum.image)
+                }
+                if (drum.body?.image != null) {
+                    referencedImagePaths.add(drum.body.image)
                 }
             }
 

@@ -155,4 +155,70 @@ class KitFactoryAndWriterTest {
         assertFalse(extracted.imageFiles.containsKey("images/orphan.png"), "PNG yatim tidak boleh ikut dikemas")
         assertEquals(pngBytes.size, extracted.imageFiles["images/kecil1.png"]!!.size)
     }
+
+    @Test
+    fun testPackageWriterIncludesReferencedBodyPngAndExcludesOrphanPng() {
+        val kit = KitFactory.createFromTemplate("body-kit", "Body Kit")
+        val bodyData = com.vrkendang.kitcore.model.DrumBodyData(
+            image = "images/sedang-body.png",
+            width = 0.45f,
+            height = 0.35f,
+            offsetX = 0.0f,
+            offsetY = 0.15f,
+            rotation = 0.0f
+        )
+        val kitWithBody = kit.copy(
+            drums = kit.drums.map { drum ->
+                if (drum.id == "sedang") {
+                    drum.copy(image = "images/sedang.png", body = bodyData)
+                } else drum
+            }
+        )
+
+        val skinPng = createMinimalPng()
+        val bodyPng = createMinimalPng()
+        val orphanPng = createMinimalPng()
+
+        val imageMap = mapOf(
+            "images/sedang.png" to skinPng,
+            "images/sedang-body.png" to bodyPng,
+            "images/orphan.png" to orphanPng
+        )
+
+        val zipBytes = KitPackageWriter.toByteArray(
+            kit = kitWithBody,
+            wavProvider = { null },
+            imageProvider = { path -> imageMap[path] }
+        )
+
+        val extracted = KitPackageReader.read(ByteArrayInputStream(zipBytes))
+        assertEquals(kitWithBody.kitId, extracted.kitData.kitId)
+        assertTrue(extracted.imageFiles.containsKey("images/sedang.png"))
+        assertTrue(extracted.imageFiles.containsKey("images/sedang-body.png"))
+        assertFalse(extracted.imageFiles.containsKey("images/orphan.png"), "PNG yatim tidak boleh ikut dikemas")
+
+        // Uji jika file PNG body yang dirujuk tidak ada di ZIP -> ditolak
+        val missingBodyZip = KitPackageWriter.toByteArray(
+            kit = kitWithBody,
+            wavProvider = { null },
+            imageProvider = { path -> if (path == "images/sedang.png") skinPng else null }
+        )
+        // Bypass writer exception dengan membuat ZIP manual tanpa body PNG
+        val corruptZipBaos = ByteArrayOutputStream()
+        java.util.zip.ZipOutputStream(corruptZipBaos).use { zos ->
+            zos.putNextEntry(java.util.zip.ZipEntry("kit.json"))
+            zos.write(com.vrkendang.kitcore.parser.KitJsonParser.stringify(kitWithBody).toByteArray(Charsets.UTF_8))
+            zos.closeEntry()
+
+            zos.putNextEntry(java.util.zip.ZipEntry("images/sedang.png"))
+            zos.write(skinPng)
+            zos.closeEntry()
+            // Tanpa images/sedang-body.png
+        }
+
+        val ex = assertFailsWith<IllegalArgumentException> {
+            KitPackageReader.read(ByteArrayInputStream(corruptZipBaos.toByteArray()))
+        }
+        assertTrue(ex.message!!.contains("File gambar body yang dirujuk tidak ditemukan"))
+    }
 }

@@ -178,4 +178,67 @@ class DevImageInstallerTest {
             tempDir.deleteRecursively()
         }
     }
+
+    @Test
+    fun testInstallValidSquareBodyPngSucceedsAndInitializesDockedBody() {
+        val tempDir = File(System.getProperty("java.io.tmpdir"), "dev-body-image-test-" + System.currentTimeMillis())
+        tempDir.mkdirs()
+        try {
+            File(tempDir, "kit.json").writeText(loadNewMetroJson())
+
+            val installer = DevImageInstaller()
+            val pngBytes = buildMinimalPng(512, 512)
+
+            val result = installer.installBodyPng(
+                drumId = "bass",
+                inputStream = ByteArrayInputStream(pngBytes),
+                devKitDir = tempDir
+            )
+
+            assertTrue(result is DevImageInstaller.Result.Success)
+            assertEquals("bass", result.drumId)
+
+            val savedFile = File(tempDir, "images/bass-body.png")
+            assertTrue(savedFile.exists())
+
+            val updatedKit = KitJsonParser.parse(File(tempDir, "kit.json").readText())
+            val bassDrum = updatedKit.drums.first { it.id == "bass" }
+            val body = bassDrum.body
+            kotlin.test.assertNotNull(body)
+            assertEquals("images/bass-body.png", body.image)
+            assertTrue(body.width > 0f)
+            assertTrue(body.height > 0f)
+            assertEquals(0f, body.offsetX)
+            assertEquals(body.height / 2f, body.offsetY)
+            assertEquals(0f, body.rotation)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun testClearBodyImageDeletesFileAndUpdatesKitJson() {
+        val tempDir = File(System.getProperty("java.io.tmpdir"), "dev-body-image-clear-" + System.currentTimeMillis())
+        tempDir.mkdirs()
+        try {
+            File(tempDir, "kit.json").writeText(loadNewMetroJson())
+            val imagesDir = File(tempDir, "images").apply { mkdirs() }
+            val existingPng = File(imagesDir, "bass-body.png").apply { writeBytes(ByteArray(10)) }
+
+            val installer = DevImageInstaller()
+            val result = installer.clearBodyImage(
+                drumId = "bass",
+                devKitDir = tempDir
+            )
+
+            assertTrue(result is DevImageInstaller.Result.Success)
+            assertFalse(existingPng.exists(), "File PNG body harus terhapus")
+
+            val updatedKit = KitJsonParser.parse(File(tempDir, "kit.json").readText())
+            val bassDrum = updatedKit.drums.first { it.id == "bass" }
+            assertNull(bassDrum.body)
+        } finally {
+            tempDir.deleteRecursively()
+        }
+    }
 }

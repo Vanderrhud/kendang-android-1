@@ -238,4 +238,91 @@ class KendangBoardViewTest {
         val missed = boardView.handleTouchAt(700f, 500f, MotionEvent.ACTION_DOWN)
         assertFalse(missed, "Sentuhan di luar kendang yang dirotasi harus diabaikan")
     }
+
+    @Test
+    fun testDrumBodyBitmapsPropertyAssignment() {
+        val boardView = KendangBoardView(object : android.content.ContextWrapper(null) {})
+        assertTrue(boardView.drumBodyBitmaps.isEmpty())
+        val fakeMap = mapOf<String, android.graphics.Bitmap>()
+        boardView.drumBodyBitmaps = fakeMap
+        assertEquals(0, boardView.drumBodyBitmaps.size)
+    }
+
+    @Test
+    fun testTouchOnBodyOutsideSkinIgnored() {
+        // Kendang dengan kulit di pusat (0.5, 0.5) dengan radius rx=0.15, ry=0.15 (px: 500, 500, r=150px)
+        // Body menjulur ke bawah: offsetY = 0.25 (y=0.75, px: 750)
+        val drumWithBody = DrumData(
+            id = "drum-body",
+            model = "single",
+            center = Point(0.50f, 0.50f),
+            radius = Radius(0.15f, 0.15f),
+            image = "images/drum-body.png",
+            body = com.vrkendang.kitcore.model.DrumBodyData(
+                image = "images/drum-body-body.png",
+                width = 0.30f,
+                height = 0.40f,
+                offsetX = 0.0f,
+                offsetY = 0.25f,
+                rotation = 0.0f
+            ),
+            zones = listOf(ZoneData(id = "drum-body-1", region = "full"))
+        )
+        val kit = KitData(
+            kitId = "body-test",
+            name = "Body Test",
+            canvasAspect = 1.0f,
+            drums = listOf(drumWithBody)
+        )
+
+        val fakeEngine = FakeAudioEngine()
+        val boardView = KendangBoardView(object : android.content.ContextWrapper(null) {})
+        boardView.kit = kit
+        boardView.audioEngine = fakeEngine
+        boardView.setDimensionsForTest(1000, 1000)
+
+        // Sentuhan di area kulit (500, 500) -> tertangani
+        val skinHit = boardView.handleTouchAt(500f, 500f, MotionEvent.ACTION_DOWN)
+        assertTrue(skinHit, "Sentuhan di area kulit harus tertangani")
+        assertEquals(1, boardView.activeHighlightsCount)
+
+        // Sentuhan di area body di luar kulit (x=500, y=750 -> di luar radius kulit y=650) -> diabaikan
+        val bodyMiss = boardView.handleTouchAt(500f, 750f, MotionEvent.ACTION_DOWN)
+        assertFalse(bodyMiss, "Sentuhan di area gambar body di luar kulit kendang harus diabaikan")
+    }
+
+    @Test
+    fun testDrawWithSkinAndBodyBitmapsDoesNotCrash() {
+        val drum = DrumData(
+            id = "drum1",
+            model = "single",
+            center = Point(0.50f, 0.50f),
+            radius = Radius(0.15f, 0.15f),
+            image = "images/drum1.png",
+            body = com.vrkendang.kitcore.model.DrumBodyData(
+                image = "images/drum1-body.png",
+                width = 0.30f,
+                height = 0.30f
+            ),
+            zones = listOf(ZoneData(id = "drum1-1", region = "full"))
+        )
+        val kit = KitData(
+            kitId = "draw-test",
+            name = "Draw Test",
+            canvasAspect = 2.0f,
+            drums = listOf(drum)
+        )
+
+        val boardView = KendangBoardView(object : android.content.ContextWrapper(null) {})
+        boardView.kit = kit
+        boardView.setDimensionsForTest(2000, 1000)
+
+        val skinBmp = android.graphics.Bitmap.createBitmap(10, 10, android.graphics.Bitmap.Config.ARGB_8888)
+        val bodyBmp = android.graphics.Bitmap.createBitmap(10, 10, android.graphics.Bitmap.Config.ARGB_8888)
+        boardView.drumBitmaps = mapOf("drum1" to skinBmp)
+        boardView.drumBodyBitmaps = mapOf("drum1" to bodyBmp)
+
+        val canvas = android.graphics.Canvas(android.graphics.Bitmap.createBitmap(2000, 1000, android.graphics.Bitmap.Config.ARGB_8888))
+        boardView.draw(canvas)
+    }
 }

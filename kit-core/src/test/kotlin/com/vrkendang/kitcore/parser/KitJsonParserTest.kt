@@ -248,4 +248,83 @@ class KitJsonParserTest {
         val reparsed = KitJsonParser.parse(stringified)
         assertEquals(35.5f, reparsed.drums[0].rotation)
     }
+
+    @Test
+    fun testParseKitWithoutBodyDefaultsToNull() {
+        val oldKitJson = """
+            {
+              "formatVersion": 1,
+              "kitId": "no-body-kit",
+              "name": "No Body Kit",
+              "drums": [
+                {
+                  "id": "bass",
+                  "model": "bass",
+                  "center": { "x": 0.25, "y": 0.55 },
+                  "radius": { "rx": 0.30, "ry": 0.30 },
+                  "zones": [
+                    { "id": "bass-1", "region": "main", "sound": null, "gain": 1.0 }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parsed = KitJsonParser.parse(oldKitJson)
+        assertNull(parsed.drums[0].body)
+    }
+
+    @Test
+    fun testParseAndRoundTripKitWithBody() {
+        val kitWithBodyJson = """
+            {
+              "formatVersion": 1,
+              "kitId": "body-kit",
+              "name": "Body Kit",
+              "drums": [
+                {
+                  "id": "sedang",
+                  "model": "split",
+                  "center": { "x": 0.60, "y": 0.60 },
+                  "radius": { "rx": 0.25, "ry": 0.15 },
+                  "rotation": 20.0,
+                  "image": "images/sedang.png",
+                  "body": {
+                    "image": "images/sedang-body.png",
+                    "width": 0.50,
+                    "height": 0.40,
+                    "offsetX": 0.05,
+                    "offsetY": 0.20,
+                    "rotation": 10.0
+                  },
+                  "zones": [
+                    { "id": "sedang-1", "region": "lower", "sound": null, "gain": 1.0 },
+                    { "id": "sedang-2", "region": "upper", "sound": null, "gain": 1.0 }
+                  ]
+                }
+              ]
+            }
+        """.trimIndent()
+
+        val parsed = KitJsonParser.parse(kitWithBodyJson)
+        val body = parsed.drums[0].body
+        kotlin.test.assertNotNull(body)
+        assertEquals("images/sedang-body.png", body.image)
+        assertEquals(0.50f, body.width)
+        assertEquals(0.40f, body.height)
+        assertEquals(0.05f, body.offsetX)
+        assertEquals(0.20f, body.offsetY)
+        assertEquals(10.0f, body.rotation)
+
+        val stringified = KitJsonParser.stringify(parsed)
+        val reparsed = KitJsonParser.parse(stringified)
+        val reparsedBody = reparsed.drums[0].body
+        kotlin.test.assertNotNull(reparsedBody)
+        assertEquals("images/sedang-body.png", reparsedBody.image)
+        assertEquals(0.50f, reparsedBody.width)
+        assertEquals(0.40f, reparsedBody.height)
+        assertEquals(0.05f, reparsedBody.offsetX)
+        assertEquals(0.20f, reparsedBody.offsetY)
+        assertEquals(10.0f, reparsedBody.rotation)
+    }
 }
