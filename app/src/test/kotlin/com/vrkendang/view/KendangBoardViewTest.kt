@@ -292,37 +292,59 @@ class KendangBoardViewTest {
     }
 
     @Test
-    fun testDrawWithSkinAndBodyBitmapsDoesNotCrash() {
-        val drum = DrumData(
-            id = "drum1",
+    fun testFrontDrumBodyDoesNotBlockBackDrumSkinHit() {
+        // Drum depan (indeks 0): kulit di atas (0.50, 0.30) r=0.10, tapi body menjulur ke bawah menutupi y=0.50
+        val frontDrum = DrumData(
+            id = "front",
+            model = "single",
+            center = Point(0.50f, 0.30f),
+            radius = Radius(0.10f, 0.10f),
+            image = "images/front.png",
+            body = com.vrkendang.kitcore.model.DrumBodyData(
+                image = "images/front-body.png",
+                width = 0.30f,
+                height = 0.40f,
+                offsetX = 0.0f,
+                offsetY = 0.20f
+            ),
+            zones = listOf(ZoneData(id = "front-1", region = "full"))
+        )
+        // Drum belakang (indeks 1): kulit di tengah (0.50, 0.50) r=0.15 (tertutup secara visual oleh body frontDrum)
+        val backDrum = DrumData(
+            id = "back",
             model = "single",
             center = Point(0.50f, 0.50f),
             radius = Radius(0.15f, 0.15f),
-            image = "images/drum1.png",
+            image = "images/back.png",
             body = com.vrkendang.kitcore.model.DrumBodyData(
-                image = "images/drum1-body.png",
+                image = "images/back-body.png",
                 width = 0.30f,
-                height = 0.30f
+                height = 0.30f,
+                offsetX = 0.0f,
+                offsetY = 0.15f
             ),
-            zones = listOf(ZoneData(id = "drum1-1", region = "full"))
+            zones = listOf(ZoneData(id = "back-1", region = "full"))
         )
         val kit = KitData(
-            kitId = "draw-test",
-            name = "Draw Test",
-            canvasAspect = 2.0f,
-            drums = listOf(drum)
+            kitId = "layer2-test",
+            name = "Layer 2 Test",
+            canvasAspect = 1.0f,
+            drums = listOf(frontDrum, backDrum)
         )
 
+        val fakeEngine = FakeAudioEngine()
         val boardView = KendangBoardView(object : android.content.ContextWrapper(null) {})
         boardView.kit = kit
-        boardView.setDimensionsForTest(2000, 1000)
+        boardView.audioEngine = fakeEngine
+        boardView.setDimensionsForTest(1000, 1000)
 
-        val skinBmp = android.graphics.Bitmap.createBitmap(10, 10, android.graphics.Bitmap.Config.ARGB_8888)
-        val bodyBmp = android.graphics.Bitmap.createBitmap(10, 10, android.graphics.Bitmap.Config.ARGB_8888)
-        boardView.drumBitmaps = mapOf("drum1" to skinBmp)
-        boardView.drumBodyBitmaps = mapOf("drum1" to bodyBmp)
+        var hitZoneId: String? = null
+        boardView.onZoneHitListener = { _, zone -> hitZoneId = zone.id }
 
-        val canvas = android.graphics.Canvas(android.graphics.Bitmap.createBitmap(2000, 1000, android.graphics.Bitmap.Config.ARGB_8888))
-        boardView.draw(canvas)
+        // Ketuk di (500, 500): meskipun secara visual berada di area body frontDrum,
+        // karena body hanya kosmetik, ketukan harus tetap mengenai kulit backDrum.
+        val hitBack = boardView.handleTouchAt(500f, 500f, MotionEvent.ACTION_DOWN)
+        assertTrue(hitBack, "Body kendang depan tidak boleh menghalangi ketukan pada kulit kendang belakang")
+        assertEquals("back-1", hitZoneId)
     }
 }
