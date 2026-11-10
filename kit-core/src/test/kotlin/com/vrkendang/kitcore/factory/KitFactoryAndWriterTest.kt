@@ -197,13 +197,16 @@ class KitFactoryAndWriterTest {
         assertTrue(extracted.imageFiles.containsKey("images/sedang-body.png"))
         assertFalse(extracted.imageFiles.containsKey("images/orphan.png"), "PNG yatim tidak boleh ikut dikemas")
 
-        // Uji jika file PNG body yang dirujuk tidak ada di ZIP -> ditolak
-        val missingBodyZip = KitPackageWriter.toByteArray(
-            kit = kitWithBody,
-            wavProvider = { null },
-            imageProvider = { path -> if (path == "images/sedang.png") skinPng else null }
-        )
-        // Bypass writer exception dengan membuat ZIP manual tanpa body PNG
+        // Uji jika file PNG body yang dirujuk tidak tersedia di imageProvider -> ditolak oleh Writer
+        assertFailsWith<IllegalArgumentException> {
+            KitPackageWriter.toByteArray(
+                kit = kitWithBody,
+                wavProvider = { null },
+                imageProvider = { path -> if (path == "images/sedang.png") skinPng else null }
+            )
+        }
+
+        // Uji jika file PNG body yang dirujuk tidak ada di ZIP -> ditolak oleh Reader
         val corruptZipBaos = ByteArrayOutputStream()
         java.util.zip.ZipOutputStream(corruptZipBaos).use { zos ->
             zos.putNextEntry(java.util.zip.ZipEntry("kit.json"))

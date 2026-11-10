@@ -527,27 +527,6 @@ class DevKitAuthoringSessionTest {
         }
     }
 
-    private fun buildMinimalPng(): ByteArray {
-        val baos = ByteArrayOutputStream()
-        baos.write(byteArrayOf(
-            0x89.toByte(), 0x50.toByte(), 0x4E.toByte(), 0x47.toByte(),
-            0x0D.toByte(), 0x0A.toByte(), 0x1A.toByte(), 0x0A.toByte()
-        ))
-        val dos = java.io.DataOutputStream(baos)
-        dos.writeInt(13)
-        dos.write("IHDR".toByteArray(Charsets.US_ASCII))
-        dos.writeInt(100)
-        dos.writeInt(100)
-        dos.writeByte(8)
-        dos.writeByte(6)
-        dos.writeByte(0)
-        dos.writeByte(0)
-        dos.writeByte(0)
-        dos.writeInt(0)
-        dos.flush()
-        return baos.toByteArray()
-    }
-
     @Test
     fun testInstallAndClearDrumBodyImage() {
         val tempDir = File.createTempFile("dev-session-body-install", "").apply { delete(); mkdirs() }
