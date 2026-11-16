@@ -15,6 +15,7 @@ Panduan ini berlaku untuk seluruh pekerjaan di repositori ini, bukan hanya untuk
 ## Batas Percobaan Saat Gagal
 
 - Untuk satu kegagalan atau pendekatan yang sama saat menulis kode, menjalankan perintah, build, test, atau verifikasi, lakukan paling banyak **dua percobaan**: percobaan awal dan satu percobaan ulang setelah membaca serta memperbaiki penyebabnya.
+- Untuk verifikasi GitHub Actions CI, batas **dua percobaan** berlaku untuk **total siklus run CI secara keseluruhan** (1 push awal + maksimal 1 push perbaikan), **bukan** dihitung terpisah per tahapan Gradle atau per jenis error. Saat push pertama gagal, audit ulang seluruh file produksi dan test yang diubah sekaligus sebelum melakukan satu-satunya push perbaikan.
 - Jika percobaan kedua masih gagal, hentikan pekerjaan pada jalur tersebut. Jangan melakukan percobaan ketiga, workaround spekulatif, perubahan scope, atau perubahan destruktif.
 - Beri laporan kepada pengguna untuk didiskusikan: tujuan yang gagal, dua langkah yang sudah dicoba, hasil/error yang relevan, dugaan penyebab, dampak terhadap task, dan pilihan langkah aman berikutnya.
 
@@ -51,3 +52,7 @@ Kode menjelaskan **apa** yang dilakukan. Komentar menjelaskan **mengapa**, **bat
 
 - Jalankan pemeriksaan yang relevan untuk area yang diubah.
 - Periksa diff sebelum commit; pastikan komentar tidak menambah noise atau informasi basi.
+- **Audit Statis Wajib Sebelum Push ke CI**: Karena VM lokal tidak memiliki compiler Kotlin/JDK, sebelum melakukan `git commit` dan `git push`, wajib periksa secara manual seluruh file yang diubah (`git diff`) terhadap:
+  1. **Smart Cast Lintas Modul**: Properti nullable dari modul `:kit-core` (seperti `drum.body`, `drum.divider`, `drum.image`) yang diakses di modul `:app` tidak bisa di-*smart-cast* langsung dengan `if (drum.prop != null)`. Wajib salin ke `val` lokal (`val prop = drum.prop; if (prop != null)`) atau gunakan *safe call* (`?.`).
+  2. **Lingkungan Unit Test Android (Robolectric vs Stub JVM)**: Jangan memanggil API grafis/framework Android (`Bitmap.createBitmap`, `BitmapFactory`, dll.) pada kelas test yang tidak memiliki `@RunWith(RobolectricTestRunner::class)` karena stub Android JVM mengembalikan `null`.
+  3. **Duplikasi Fungsi & Assertion Test**: Periksa seluruh isi file test sebelum menambah fungsi bantu (`private fun`) agar tidak terjadi *conflicting overloads*, dan pastikan setiap pengujian kasus gagal sudah dibungkus `assertFailsWith`.

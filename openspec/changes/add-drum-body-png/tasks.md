@@ -21,5 +21,5 @@
 
 ## 4. Verifikasi menyeluruh
 
-- [ ] 4.1 Jalankan CI di GitHub Actions: seluruh unit test `:kit-core` dan `:app` lulus, verifikasi APK release bebas kode Mode Developer lulus, dan artefak APK debug berhasil diterbitkan.
+- [x] 4.1 Jalankan CI di GitHub Actions: seluruh unit test `:kit-core` dan `:app` lulus, verifikasi APK release bebas kode Mode Developer lulus, dan artefak APK debug berhasil diterbitkan.
 - [ ] 4.2 Uji manual di HP fisik: pasang gambar PNG kulit dan PNG body pada kendang di Mode Developer, uji tombol `⚡ Rapatkan ke Kulit` dan `↺ Reset Body`, sesuaikan slider Lebar/Tinggi/Geser/Kemiringan Body, geser dan putar kendang induk untuk memastikan body mengikuti secara *parent-child*, serta pastikan urutan tumpukan antar kendang dan area ketuk (hit-testing) berfungsi akurat.
