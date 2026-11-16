@@ -1,12 +1,28 @@
-# VR Kendang — Low-Latency Android Percussion Instrument
+# VR Kendang — Authentic Javanese & Indonesian Traditional Percussion Instrument
 
 [![Build APK](https://github.com/Vanderrhud/kendang-android-1/actions/workflows/build-apk.yml/badge.svg)](https://github.com/Vanderrhud/kendang-android-1/actions/workflows/build-apk.yml)
 ![Platform](https://img.shields.io/badge/Platform-Android%20(API%2026%E2%80%9334)-3DDC84?logo=android&logoColor=white)
 ![Language](https://img.shields.io/badge/Kotlin-1.9.24-7F52FF?logo=kotlin&logoColor=white)
 ![Native Audio](https://img.shields.io/badge/C%2B%2B17-Google%20Oboe%201.9.3-00599C?logo=cplusplus&logoColor=white)
-![License](https://img.shields.io/badge/License-Proprietary%20%2F%20Source--Available-red)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE)
 
-**VR Kendang** is a native Android multi-touch virtual percussion application engineered for ultra-low-latency real-time performance. It combines a **C++17 native audio engine** powered by Google Oboe with a custom **multi-touch canvas rendering & geometry hit-testing pipeline** and a pure JVM domain core.
+**VR Kendang** is a native Android virtual percussion instrument dedicated to preserving and simulating the expressive playing techniques of the **Kendang**—a traditional double-headed hand drum from **Java, Indonesia** that forms the rhythmic backbone of Javanese traditional music, *Gamelan*, *Campursari*, and modern *Dangdut / Koplo* ensembles.
+
+Unlike generic Western grid-pad drum apps, **VR Kendang** is purpose-built around the physical acoustics, multi-zone membrane geometry, and rapid two-handed finger/palm articulations unique to Indonesian kendang performance, combining a **C++17 native audio engine** (Google Oboe) with a **custom mathematical membrane hit-testing engine** and a pure JVM domain core.
+
+---
+
+## Cultural Context & Acoustic Modeling (Why Not a Generic Drum Pad?)
+
+Playing a traditional Javanese *Kendang* (and *Ketipung* ensemble) relies on intricate hand positioning across a single drumhead rather than striking discrete single-sound pads with sticks:
+
+1. **Multi-Zone Membrane Articulations (*Dut*, *Deng*, *Tak*, *Tung*, *Pak*)**:
+   - **Kendang Gede / Bass (`bass` model)**: Striking the center of the leather membrane produces deep resonant bass tones (*Dut* / *Deng*), while striking the outer crescent rim bands with the palm or fingertips yields progressively sharper overtones. Our geometry engine models this via an elliptical drumhead partitioned into a `main` core zone and up to 3 concentric outer `crescent` bands (`band 0–2`).
+   - **Ketipung / Kendang Kecil & Sedang (`split` & `single` models)**: High-pitched interlocking patterns (*Tak*, *Tung*, *Pak*) depend on whether the player strikes the upper or lower half of the membrane. The `split` drum model divides the elliptical drumhead along a configurable angular vector (`divider.angle`) into `upper` and `lower` strike regions.
+2. **Authentic Hand-Muting (*Choke Groups*)**:
+   In Javanese kendang technique, an open resonant stroke is frequently dampened mid-ring by a subsequent slap or palm mute on the same drumhead. The C++ audio engine models this physically via **Choke Group Cancellation**, immediately silencing active voices in the same choke group when a muting articulation is triggered.
+3. **Rapid Interlocking Syncopation**:
+   Javanese *Koplo* and traditional kendang patterns involve fast, simultaneous two-handed finger rolls that are unplayable if audio latency exceeds ~15–20 ms or if touch events block the audio thread—motivating our lock-free C++17 Oboe pipeline.
 
 ---
 
@@ -20,7 +36,7 @@
 
 ### 2. Pure JVM Domain & Geometry Core (`:kit-core`)
 - **Framework-Free Architecture**: `:kit-core` is a pure Kotlin/JVM module with zero `android.*` dependencies, enabling fast, deterministic JUnit 5 tests without emulator overhead.
-- **Mathematical Hit-Testing Engine (`HitTester`)**: Evaluates multi-touch coordinates against elliptical and circular drum bounds (`RECT_OVAL`, `CIRCLE`), angled zone dividers, concentric inner zones, and priority ordering.
+- **Mathematical Membrane Hit-Testing Engine (`HitTester`)**: Evaluates multi-touch coordinates against elliptical drum bounds (`rx`, `ry`), offset crescent arcs (`bass` model with `main` and `crescent` bands), angled linear dividers (`split` model with `upper`/`lower` regions), and full-head membranes (`single` model).
 - **Self-Contained Kit Packaging (`.vrkendang`)**: Implements binary/ZIP package serialization (`KitPackageReader`, `KitPackageWriter`), strict schema/asset validation (`KitValidator`, `WavParser`, `PngValidator`), and user layout override merging (`LayoutMerger`).
 
 ### 3. Custom Multi-Touch Canvas & Layered Skin Rendering (`:app`)
@@ -44,7 +60,7 @@ flowchart LR
     end
 
     subgraph Core["Pure JVM Domain (:kit-core)"]
-        HitTest["HitTester\n(Ellipse / Divider / Inner Zone)"]
+        HitTest["HitTester\n(Bass Crescent / Split / Single Zones)"]
         Model["KitData / DrumData / ZoneData"]
         PkgIO["KitPackageReader & Writer\n(.vrkendang / WavParser / PngValidator)"]
     end
@@ -136,11 +152,8 @@ Build the Release APK (production variant, stripped of developer authoring class
 
 ## License & Copyright
 
-**Copyright © 2026 Rudianto Eko Prasetyo (@Vanderrhud). All Rights Reserved.**
+**Copyright © 2026 Rudianto Eko Prasetyo (@Vanderrhud).**
 
-This repository is made publicly visible under a **Proprietary / Source-Available License** strictly for **technical evaluation, code review, and portfolio assessment**.
+This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)**. Any redistribution or derivative work must retain original copyright attribution and be distributed under the same GPL-3.0 terms with full source code disclosure.
 
-- You **may** view, inspect, and clone this repository locally for evaluation purposes.
-- You **may not** copy, redistribute, modify, sublicense, extract bundled audio/visual assets, or publish derivative works or compiled packages (APK/AAB) for commercial or non-commercial distribution without prior written permission from the copyright holder.
-
-See the [LICENSE](LICENSE) file for the full legal terms.
+See the [LICENSE](LICENSE) file for the full license text.
