@@ -1,0 +1,39 @@
+PROPRIETARY / SOURCE-AVAILABLE LICENSE
+(All Rights Reserved with Limited Evaluation Grant)
+
+Copyright (c) 2026 Rudianto Eko Prasetyo (@Vanderrhud). All Rights Reserved.
+
+1. OWNERSHIP & COPYRIGHT
+All source code (including Kotlin and C++/NDK implementations), architecture
+specifications, build configurations, documentation, graphical assets, and bundled
+audio samples (.wav / .vrkendang files) contained in this repository (collectively,
+the "Software and Assets") are the exclusive intellectual property of
+Rudianto Eko Prasetyo (@Vanderrhud) and are protected by applicable copyright laws
+and international intellectual property treaties.
+
+2. LIMITED EVALUATION GRANT
+Permission is hereby granted, free of charge, solely to view, inspect, and clone
+this repository locally for the strictly limited purpose of technical evaluation,
+code review, or recruitment assessment.
+
+3. PROHIBITED USES
+Except as expressly permitted under Section 2 or by prior written authorization
+from the copyright holder, you may NOT:
+  a. Copy, redistribute, publish, sublicense, or host the Software and Assets
+     (in whole or in part) in any public or private repository or distribution channel;
+  b. Modify, adapt, translate, or create derivative works based upon the
+     Software and Assets;
+  c. Compile, package, or distribute the Software as an installable application
+     (including APK or AAB packages) on Google Play Store or any third-party
+     marketplace;
+  d. Extract, reuse, or redistribute any audio samples (.wav), kit definitions
+     (kit.json / .vrkendang), or visual assets bundled within this repository;
+  e. Use the Software and Assets for any commercial purpose or monetary gain.
+
+4. DISCLAIMER OF WARRANTY & LIMITATION OF LIABILITY
+THE SOFTWARE AND ASSETS ARE PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHOR OR COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
